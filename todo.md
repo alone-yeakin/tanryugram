@@ -273,3 +273,9 @@
 - [x] Compare browser image-request behavior and storage responses between both sessions
 - [x] Repair the account-specific difference causing the non-owner AI fallback tile by remounting feed cards when the viewer account changes
 - [x] Verify both sessions render the same creator image and save a checkpoint
+
+## Remove visible storage configuration card
+
+- [x] Locate the Google Cloud Storage owner-config card in the public UI
+- [x] Remove the card without changing backend storage or upload behavior
+- [x] Run validation and save an updated checkpoint
