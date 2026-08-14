@@ -228,3 +228,33 @@
 - [x] Replace the server-only mailer URL with the newly redeployed branded Apps Script URL
 - [x] Validate the new deployment with the existing private MAIL_API_SECRET
 - [x] Save a checkpoint for the branded email deployment update
+
+## APK delivery request
+
+- [x] Search the project, upload area, and supplied archives for an existing TanRyuGram APK artifact; none was found
+- [x] Verify that no APK file is available for delivery; the available mobile artifact is Expo/EAS source only
+- [x] Explain that a new Expo/EAS Android APK build is required
+
+## Focused Android APK build
+
+- [x] Audit the supplied Expo mobile source and production server URL
+- [x] Configure the mobile app to connect to the live TanRyuGram server
+- [x] Improve the mobile app launch and error states without changing the server contract
+- [x] Attempt local Android APK build; the environment lacks a stable Android toolchain and Gradle was terminated under memory pressure
+- [x] Report the unavoidable APK build blocker; no APK artifact was available and local Gradle build could not complete
+
+## Website signup verification delivery repair
+
+- [x] Audit the signup verification mutation and current Apps Script deployment payload
+- [x] Ensure signup verification codes are emailed reliably and are included in the email body; user confirmed delivery, including Spam-folder placement
+- [x] Keep signup responses and server logs free of verification-code values
+- [x] Add regression coverage for signup delivery and code redaction
+- [x] Run validation and save an updated checkpoint
+
+## Cross-account media visibility repair
+
+- [x] Audit profile avatar, AI-generated profile image, and post-media storage records and URL resolvers
+- [x] Fix media access and URL normalization for non-owner accounts such as aayanafilmz@gmail.com
+- [x] Preserve creator-owner media access and existing upload behavior
+- [x] Add regression coverage for owner and non-owner media resolution
+- [x] Run visual and automated verification and save an updated checkpoint

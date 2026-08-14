@@ -13,7 +13,7 @@ import {
 import { WebView } from "react-native-webview";
 import type { WebViewErrorEvent, WebViewHttpErrorEvent, WebViewNavigation } from "react-native-webview/lib/WebViewTypes";
 
-const APP_URL = "https://3000-il5x7uohusawk3rcy6ksz-57959f74.sg1.manus.computer";
+const APP_URL = "https://tanryugram-njs4tc3o.manus.space";
 const APP_HOST = new URL(APP_URL).host;
 
 function LoadingView() {

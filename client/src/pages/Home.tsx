@@ -5,6 +5,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { trpc } from "@/lib/trpc";
 import { normalizeMessengerPeer } from "@/lib/messengerPeer";
 import { initialsAvatar } from "@/lib/mediaUrl";
+import { resolveProfileUser } from "@/lib/profileViewData";
 import { toast } from "sonner";
 import {
   Bell, Bookmark, Check, ChevronRight, CircleHelp, Compass, CreditCard, Heart, Home as HomeIcon, ImagePlus, LogOut, Mail, Menu, MessageCircle, MoreHorizontal, Moon, Play, Plus, Search, Send, Settings, ShieldCheck, Sparkles, Sun, Users, Video, X, Zap,
@@ -210,7 +211,7 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
   const deletePostMutation = trpc.admin.deletePost.useMutation();
   const utils = trpc.useUtils();
   
-  const targetUser = profileUser;
+  const targetUser = resolveProfileUser(profileUser, profileQuery.data?.user);
   const userPosts = profileQuery.data?.posts || [];
 
   const stats = profileQuery.data?.stats || { followers: 0, following: 0, posts: 0 };
