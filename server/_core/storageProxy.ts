@@ -38,8 +38,28 @@ export function registerStorageProxy(app: Express) {
         return;
       }
 
-      res.set("Cache-Control", "no-store");
-      res.redirect(307, url);
+      const mediaResp = await fetch(url);
+      if (!mediaResp.ok) {
+        console.error(`[StorageProxy] signed media error: ${mediaResp.status}`);
+        res.status(502).send("Stored media unavailable");
+        return;
+      }
+      const contentLength = Number(mediaResp.headers.get("content-length") || 0);
+      if (contentLength > 15 * 1024 * 1024) {
+        res.status(413).send("Stored media is too large to proxy");
+        return;
+      }
+      const body = Buffer.from(await mediaResp.arrayBuffer());
+      if (!body.length) {
+        res.status(404).send("Stored media is empty");
+        return;
+      }
+      res.status(200);
+      res.set("Content-Type", mediaResp.headers.get("content-type") || "application/octet-stream");
+      res.set("Content-Length", String(body.length));
+      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
+      res.set("Access-Control-Allow-Origin", "*");
+      res.send(body);
     } catch (err) {
       console.error("[StorageProxy] failed:", err);
       res.status(502).send("Storage proxy error");

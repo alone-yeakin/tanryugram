@@ -1,0 +1,9 @@
+# Tanryugram media repair findings
+
+The public storage proxy is working. Direct requests to `/manus-storage/users/1/1001312908_521e003d.webp`, `/manus-storage/users/1/1001312908_d1a62f37.webp`, and `/manus-storage/users/1/1746189751109_6d94b850.jpg` return HTTP 307 to signed CloudFront URLs and then HTTP 200 with image content. A direct browser visit rendered the owner photo correctly.
+
+The database contains valid storage-backed media for the owner (`users.id=1.avatarUrl=/manus-storage/users/1/1001312908_521e003d.webp` and a post using `/manus-storage/users/1/1001312908_d1a62f37.webp`). It also contains legacy external placeholder URLs for several users (DiceBear and Unsplash), which can fail on restricted mobile networks. More importantly, seeded posts with IDs 2–5 reference `userId` values 2–5, but only user ID 1 exists in that range; the current feed query uses an inner join to users, so orphaned seeded posts are omitted entirely.
+
+The remaining app-side risks are inconsistent profile/post media mapping and external placeholder dependence. The repair should use a left join or normalized creator fallback for orphaned posts, preserve valid `/manus-storage/` paths, and route all returned media through the shared SafeImage/mediaSource path. No database media bytes should be copied or fabricated; the storage proxy is already the source of truth.
+
+The repaired same-origin proxy now returns HTTP 200 directly with `content-type: image/webp`, `content-length: 124710`, and public short-lived cache headers for the exact owner avatar path; it no longer redirects the browser to CloudFront. The direct storage image renders correctly in a browser. The managed preview after restart is currently waiting on session restoration, so an authenticated feed screenshot still needs to be performed before final delivery.

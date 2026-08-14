@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `isBanned` boolean DEFAULT false NOT NULL;

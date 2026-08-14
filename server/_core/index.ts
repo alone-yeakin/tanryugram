@@ -1,4 +1,3 @@
-import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -8,6 +7,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { handleStripeWebhook } from "../stripeWebhook";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -31,6 +31,19 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // Redirect legacy domain requests to tanryugram.manus.space
+  app.use((req, res, next) => {
+    const host = req.get("host") || "";
+    if (host.includes("pulsesocil-ya4mwil9.manus.space") || host.includes("pulse-social")) {
+      return res.redirect(301, `https://tanryugram.manus.space${req.originalUrl}`);
+    }
+    next();
+  });
+
+  // Stripe requires the raw request body for signature verification. This route is intentionally mounted before express.json().
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
+
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

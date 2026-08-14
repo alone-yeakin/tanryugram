@@ -71,6 +71,19 @@ export async function storagePut(
   return { key, url: `/manus-storage/${key}` };
 }
 
+export async function storagePresignPut(relKey: string, contentType = "application/octet-stream"): Promise<{ key: string; uploadUrl: string; url: string }> {
+  const { forgeUrl, forgeKey } = getForgeConfig();
+  const key = appendHashSuffix(normalizeKey(relKey));
+  const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
+  presignUrl.searchParams.set("path", key);
+  presignUrl.searchParams.set("contentType", contentType);
+  const resp = await fetch(presignUrl, { headers: { Authorization: `Bearer ${forgeKey}` } });
+  if (!resp.ok) throw new Error(`Storage presign failed (${resp.status})`);
+  const { url: uploadUrl } = (await resp.json()) as { url: string };
+  if (!uploadUrl) throw new Error("Forge returned empty presign URL");
+  return { key, uploadUrl, url: `/manus-storage/${key}` };
+}
+
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
   return { key, url: `/manus-storage/${key}` };
