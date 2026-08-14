@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { initialsAvatar, mediaSource } from "@/lib/mediaUrl";
 import { SafeImage } from "@/components/SafeImage";
@@ -21,6 +22,9 @@ export function LoginPanel({ onLogin }: { onLogin: () => void }) {
           <p className="mt-2 text-sm text-muted-foreground">A creator-first social space for independent work, stories, conversations, and community.</p>
           <div className="mt-8 space-y-4">
             <EmailAuthForm onLoginSuccess={() => window.location.reload()} />
+            <button type="button" onClick={() => startLogin()} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-violet-300 bg-violet-500/10 py-3 text-xs font-semibold text-violet-700 transition hover:bg-violet-500/20 dark:text-violet-300">
+              Continue with current Manus account
+            </button>
             <button onClick={() => setShowOnboarding(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-muted py-3 text-xs font-semibold transition hover:bg-muted/80">
               View Welcome Onboarding
             </button>

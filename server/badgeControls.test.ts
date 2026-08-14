@@ -1,11 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { badgeApplications, users } from "../drizzle/schema";
-import { appRouter } from "./routers";
+import { appRouter, sanitizeAuthUser } from "./routers";
+import { isTanryugramOwner } from "./authorization";
+import { ENV } from "./_core/env";
 
 const anonymousCaller = appRouter.createCaller({ req: {} as any, res: {} as any, user: null } as any) as any;
 const nonOwnerCaller = appRouter.createCaller({ req: {} as any, res: {} as any, user: { id: 42, email: "member@example.com" } } as any) as any;
 
 describe("Tanryugram badge and follower-display controls", () => {
+  it("recognizes the current Manus owner identity without an email literal", () => {
+    expect(isTanryugramOwner(ENV.ownerOpenId)).toBe(Boolean(ENV.ownerOpenId));
+    expect(isTanryugramOwner(`${ENV.ownerOpenId}-lookalike`)).toBe(false);
+  });
+
+  it("exposes Creator Studio visibility from the server-derived owner flag", () => {
+    expect(sanitizeAuthUser({ openId: ENV.ownerOpenId, role: "user", passwordHash: "hidden" })).toMatchObject({ isOwner: Boolean(ENV.ownerOpenId) });
+    expect(sanitizeAuthUser({ openId: "ordinary-open-id", role: "admin" })).toMatchObject({ isOwner: false });
+  });
+
   it("defines blue, black, and no-badge states plus the owner follower override", () => {
     expect(users.badgeType.enumValues).toEqual(["none", "blue", "black"]);
     expect(users.displayedFollowersCount).toBeDefined();

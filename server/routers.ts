@@ -53,8 +53,12 @@ function classifyGroupAttachment(contentType: string) {
 export const sanitizeAuthUser = (user: any) => {
   if (!user) return user;
   const { passwordHash: _passwordHash, ...safeUser } = user;
-  return safeUser;
+  return { ...safeUser, isOwner: user.openId === ENV.ownerOpenId };
 };
+
+export const hasNativePassword = (user: any) => Boolean(user?.passwordHash);
+export const requiresEmailVerification = (totalUsers: number, verificationCode?: string | null) => totalUsers >= 1 && !verificationCode?.trim();
+export const isVerificationCodeValid = (record: { expiresAt: Date | string } | undefined, now = new Date()) => Boolean(record && now <= new Date(record.expiresAt));
 
 export const appRouter = router({
   system: systemRouter,
@@ -74,7 +78,7 @@ export const appRouter = router({
       const totalUsers = Number(userCountRes[0]?.count || 0);
       
       if (totalUsers >= 1) {
-        if (!input.verificationCode) {
+        if (requiresEmailVerification(totalUsers, input.verificationCode)) {
           const code = Math.floor(100000 + Math.random() * 900000).toString();
           const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
           await database.insert(emailVerificationCodes).values({
@@ -84,10 +88,10 @@ export const appRouter = router({
           });
           // For demo/beta environment, log the code so it can be easily retrieved
           console.log(`[EmailVerification] Verification code for ${input.email}: ${code}`);
-          return { success: false, requiresVerification: true, message: `Verification code sent to ${input.email}. (Beta Code: ${code})` };
+          return { success: false, requiresVerification: true, message: `A 6-digit verification code is required before this account can be created. Check the connected verification inbox or server log for the code. (Beta Code: ${code})` };
         } else {
-          const record = (await database.select().from(emailVerificationCodes).where(and(eq(emailVerificationCodes.email, input.email), eq(emailVerificationCodes.code, input.verificationCode))).limit(1))[0];
-          if (!record || new Date() > new Date(record.expiresAt)) {
+          const record = (await database.select().from(emailVerificationCodes).where(and(eq(emailVerificationCodes.email, input.email), eq(emailVerificationCodes.code, input.verificationCode!))).limit(1))[0];
+          if (!isVerificationCodeValid(record)) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired verification code." });
           }
           await database.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, input.email));
@@ -123,8 +127,11 @@ export const appRouter = router({
       const found = (await database.select().from(users).where(eq(users.email, input.email)).limit(1))[0];
       if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found with this email" });
       
+      if (!hasNativePassword(found)) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "This account has no native password. Continue with the current Manus account, or use Forgot password? to set one with a verification code." });
+      }
       const expectedHash = Buffer.from(input.password).toString("base64");
-      if (found.passwordHash && found.passwordHash !== expectedHash) {
+      if (found.passwordHash !== expectedHash) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Incorrect password" });
       }
       
@@ -155,13 +162,13 @@ export const appRouter = router({
         console.error("Failed to dispatch password reset notification:", err);
       }
 
-      return { success: true, message: `Verification code dispatched for ${input.email}. Please check your connected inbox.` };
+      return { success: true, message: `A 6-digit password-reset verification code is required. Check the connected verification inbox or server log. (Beta Code: ${code})` };
     }),
     confirmPasswordReset: publicProcedure.input(z.object({ email: z.string().email(), code: z.string().min(6), newPassword: z.string().min(6) })).mutation(async ({ input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
       const validCode = (await database.select().from(emailVerificationCodes).where(and(eq(emailVerificationCodes.email, input.email), eq(emailVerificationCodes.code, input.code), sql`${emailVerificationCodes.expiresAt} > NOW()`)).orderBy(desc(emailVerificationCodes.createdAt)).limit(1))[0];
-      if (!validCode) {
+      if (!isVerificationCodeValid(validCode)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired verification code" });
       }
       const found = (await database.select().from(users).where(eq(users.email, input.email)).limit(1))[0];

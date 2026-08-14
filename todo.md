@@ -142,3 +142,22 @@
 - [x] Run typecheck, production build, and the 17-file/44-test Vitest suite successfully
 - [x] Capture an unauthenticated desktop preview of the migrated app shell
 - [ ] Complete authenticated two-account browser verification for cross-account messaging, media sharing, calls, owner controls, and profile-to-message handoff when logged-in sessions are available
+
+## Current owner-access repair
+
+- [x] Audit all remaining suspended-email references and owner identity checks in authentication, verification-code, Creator Studio, and badge controls
+- [x] Ensure current Manus session owner identity is the sole owner authorization source via ENV.ownerOpenId
+- [x] Repair current owner account reconciliation so the current email can access Creator Studio without fabricating lost historical data
+- [x] Fix signup/login verification-code behavior so the suspended email is never required for owner access
+- [x] Add regression tests for current owner authorization, Creator Studio visibility, and badge controls
+- [x] Verify the repaired owner flow and save an updated checkpoint
+
+## Authentication and owner-routing repair
+
+- [x] Audit the actual authenticated user response and verify that owner status reaches the client after login
+- [x] Fix current-account routing so Creator Studio is visible after authentication
+- [x] Require and persist native password setup for email accounts instead of silently accepting missing passwords
+- [x] Make beta verification-code requirements explicit for signup and password reset, with clear code-entry states; production Gmail delivery still requires an email provider configuration
+- [x] Ensure password-reset completion writes the new password hash for subsequent login
+- [x] Add regression tests for owner routing, password requirements, and verification-code validity; password-reset persistence uses the same validated code path
+- [x] Run visual and automated verification and save an updated checkpoint
