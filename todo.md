@@ -161,3 +161,9 @@
 - [x] Ensure password-reset completion writes the new password hash for subsequent login
 - [x] Add regression tests for owner routing, password requirements, and verification-code validity; password-reset persistence uses the same validated code path
 - [x] Run visual and automated verification and save an updated checkpoint
+
+## Current owner password registration
+
+- [x] Set a native password for the current owner account without storing the plaintext password in source or logs
+- [x] Verify the current owner record has a password hash and remains admin/owner-authorized
+- [x] Save a checkpoint documenting the password registration without exposing the secret
