@@ -266,3 +266,10 @@
 - [x] Repair feed media URL resolution or persistence so non-owner viewers see the real photo by hardening SafeImage against stale fallback races
 - [x] Add a regression test for the creator post media path
 - [x] Verify the non-owner feed and save an updated checkpoint
+
+## Owner versus non-owner media contradiction
+
+- [x] Compare owner and non-owner feed payloads for the same creator post
+- [x] Compare browser image-request behavior and storage responses between both sessions
+- [x] Repair the account-specific difference causing the non-owner AI fallback tile by remounting feed cards when the viewer account changes
+- [x] Verify both sessions render the same creator image and save a checkpoint
