@@ -208,3 +208,23 @@
 - [x] Replace the Gmail API OAuth stub with the Apps Script delivery adapter
 - [x] Add regression coverage proving reset responses do not expose codes
 - [x] Validate the private mailer endpoint authentication without sending an unsolicited email and save an updated checkpoint
+
+## Apps Script email-template correction
+
+- [ ] Update the Apps Script mail template to include the generated verification code in the email body
+- [ ] Redeploy the Apps Script and verify the new deployment is used by TanRyuGram
+- [ ] Confirm codes remain absent from the website response and server logs
+- [ ] Save an updated checkpoint
+
+## Branded verification email design
+
+- [x] Create a polished TanRyuGram HTML email template with a clear verification-code card
+- [x] Add responsive styling, expiry messaging, and security guidance for recipients
+- [x] Preserve plain-text fallback and keep codes out of website responses/logs
+- [x] Redeploy the owner-controlled Apps Script template and record the update
+
+## Branded Apps Script deployment update
+
+- [x] Replace the server-only mailer URL with the newly redeployed branded Apps Script URL
+- [x] Validate the new deployment with the existing private MAIL_API_SECRET
+- [x] Save a checkpoint for the branded email deployment update
