@@ -258,3 +258,11 @@
 - [x] Preserve creator-owner media access and existing upload behavior
 - [x] Add regression coverage for owner and non-owner media resolution
 - [x] Run visual and automated verification and save an updated checkpoint
+
+## Exact creator feed-media failure
+
+- [x] Trace the screenshot’s creator post through feed data and postMedia records
+- [x] Verify the stored media URL and public storage-proxy response for the exact post
+- [x] Repair feed media URL resolution or persistence so non-owner viewers see the real photo by hardening SafeImage against stale fallback races
+- [x] Add a regression test for the creator post media path
+- [x] Verify the non-owner feed and save an updated checkpoint
