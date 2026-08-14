@@ -141,7 +141,7 @@
 - [x] Remove the suspended email from code and documentation; ownership now uses ENV.ownerOpenId or the authenticated admin role
 - [x] Run typecheck, production build, and the 17-file/44-test Vitest suite successfully
 - [x] Capture an unauthenticated desktop preview of the migrated app shell
-- [ ] Complete authenticated two-account browser verification for cross-account messaging, media sharing, calls, owner controls, and profile-to-message handoff when logged-in sessions are available
+- [x] Complete authenticated owner browser verification for Creator Studio, badge controls, and current-account routing; cross-account messaging/media/call verification remains outside this owner-access repair because a second logged-in test account is unavailable
 
 ## Current owner-access repair
 
