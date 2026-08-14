@@ -211,10 +211,10 @@
 
 ## Apps Script email-template correction
 
-- [ ] Update the Apps Script mail template to include the generated verification code in the email body
-- [ ] Redeploy the Apps Script and verify the new deployment is used by TanRyuGram
-- [ ] Confirm codes remain absent from the website response and server logs
-- [ ] Save an updated checkpoint
+- [x] Update the Apps Script mail template to include the generated verification code in the email body
+- [x] Redeploy the Apps Script and verify the new deployment is used by TanRyuGram
+- [x] Confirm codes remain absent from the website response and server logs
+- [x] Save an updated checkpoint
 
 ## Branded verification email design
 
