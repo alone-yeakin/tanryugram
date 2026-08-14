@@ -5,7 +5,7 @@ import { isTanryugramOwner } from "./authorization";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { notifyOwner } from "./_core/notification";
+import { sendVerificationEmail } from "./gmailMailer";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { storagePresignPut, storagePut } from "./storage";
 import * as db from "./db";
@@ -86,9 +86,14 @@ export const appRouter = router({
             code,
             expiresAt,
           });
-          // For demo/beta environment, log the code so it can be easily retrieved
-          console.log(`[EmailVerification] Verification code for ${input.email}: ${code}`);
-          return { success: false, requiresVerification: true, message: `A 6-digit verification code is required before this account can be created. Check the connected verification inbox or server log for the code. (Beta Code: ${code})` };
+          try {
+            await sendVerificationEmail({ to: input.email, code, purpose: "signup" });
+          } catch (error) {
+            await database.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, input.email));
+            console.error("[EmailVerification] Delivery failed without exposing the code", error instanceof Error ? error.message : "unknown error");
+            throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "We could not send the verification email. Please try again later." });
+          }
+          return { success: false, requiresVerification: true, message: "A verification code was sent to your email. It expires in 15 minutes." };
         } else {
           const record = (await database.select().from(emailVerificationCodes).where(and(eq(emailVerificationCodes.email, input.email), eq(emailVerificationCodes.code, input.verificationCode!))).limit(1))[0];
           if (!isVerificationCodeValid(record)) {
@@ -152,17 +157,15 @@ export const appRouter = router({
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
       await database.insert(emailVerificationCodes).values({ email: input.email, code, expiresAt });
       
-      // Dispatch password reset email via Manus owner notification service to reach the connected inbox
       try {
-        await notifyOwner({
-          title: `Tanryugram Password Reset Code for ${input.email}`,
-          content: `Password reset verification code requested for account ${input.email}:\n\nVerification Code: ${code}\n\nThis code expires in 15 minutes.`
-        });
-      } catch (err) {
-        console.error("Failed to dispatch password reset notification:", err);
+        await sendVerificationEmail({ to: input.email, code, purpose: "password-reset" });
+      } catch (error) {
+        await database.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, input.email));
+        console.error("[PasswordReset] Delivery failed without exposing the code", error instanceof Error ? error.message : "unknown error");
+        throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "We could not send the password-reset email. Please try again later." });
       }
 
-      return { success: true, message: `A 6-digit password-reset verification code is required. Check the connected verification inbox or server log. (Beta Code: ${code})` };
+      return { success: true, message: "If an account exists, a password-reset code was sent to its email address." };
     }),
     confirmPasswordReset: publicProcedure.input(z.object({ email: z.string().email(), code: z.string().min(6), newPassword: z.string().min(6) })).mutation(async ({ input }) => {
       const database = await db.getDb();

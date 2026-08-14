@@ -183,3 +183,28 @@
 - [x] Replace raw SQL mutation errors with actionable user-facing verification messages
 - [x] Add regression coverage for repeated code requests and invalid/expired codes
 - [x] Run tests/build and save an updated checkpoint
+
+## Secure password-reset email delivery
+
+- [x] Remove password-reset codes from website responses, client messages, and server logs
+- [x] Add secure email-provider delivery for reset codes to the requested Gmail address
+- [x] Request and store provider credentials only through project secrets, never source code
+- [x] Add regression coverage proving reset responses do not contain the code
+- [x] Run tests/build and save an updated security checkpoint
+
+## Owner-only Gmail API OAuth delivery
+
+- [x] Keep Gmail OAuth controls, sender identity, tokens, and provider configuration owner-only
+- [x] Remove reset codes from API responses and all server logs
+- [x] Send signup and password-reset codes through the owner-only Apps Script Gmail mailer from the configured mailbox
+- [x] Add secure OAuth secret handling and an owner-only authorization/configuration path
+- [x] Add regression tests proving the Apps Script secret is accepted without sending and reset responses contain no code
+- [x] Verify delivery behavior and save an updated checkpoint
+
+## Apps Script Gmail mailer connection
+
+- [x] Store the deployed Apps Script mailer URL as a server-only configuration value
+- [x] Request and store the Apps Script MAIL_API_SECRET securely
+- [x] Replace the Gmail API OAuth stub with the Apps Script delivery adapter
+- [x] Add regression coverage proving reset responses do not expose codes
+- [x] Validate the private mailer endpoint authentication without sending an unsolicited email and save an updated checkpoint
