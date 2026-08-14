@@ -279,3 +279,10 @@
 - [x] Locate the Google Cloud Storage owner-config card in the public UI
 - [x] Remove the card without changing backend storage or upload behavior
 - [x] Run validation and save an updated checkpoint
+
+## Home and Explore mobile polish
+
+- [x] Replace the Home “The daily pulse” headline with stronger TanRyuGram copy
+- [x] Fix the Explore navigation button and active-view behavior
+- [x] Make Explore render as a mobile-native responsive surface instead of a desktop webview-like layout
+- [x] Run desktop/mobile visual verification and save an updated checkpoint
