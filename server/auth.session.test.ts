@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { emailVerificationCodes } from "../drizzle/schema";
 import { hasNativePassword, isVerificationCodeValid, requiresEmailVerification, sanitizeAuthUser } from "./routers";
 
 describe("native auth session responses", () => {
@@ -6,6 +7,12 @@ describe("native auth session responses", () => {
     expect(hasNativePassword({ passwordHash: "encoded" })).toBe(true);
     expect(hasNativePassword({ passwordHash: null })).toBe(false);
     expect(hasNativePassword({})).toBe(false);
+  });
+  it("keeps the verification-code table contract available for signup and reset", () => {
+    expect(emailVerificationCodes.email).toBeDefined();
+    expect(emailVerificationCodes.code).toBeDefined();
+    expect(emailVerificationCodes.expiresAt).toBeDefined();
+    expect(emailVerificationCodes.createdAt).toBeDefined();
   });
   it("requires verification for additional accounts and rejects expired codes", () => {
     expect(requiresEmailVerification(0)).toBe(false);

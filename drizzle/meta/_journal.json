@@ -148,6 +148,13 @@
       "when": 1786701716222,
       "tag": "0020_graceful_chameleon",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1786720400000,
+      "tag": "0021_add_email_verification_codes",
+      "breakpoints": true
     }
   ]
 }

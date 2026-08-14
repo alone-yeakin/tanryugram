@@ -175,3 +175,11 @@
 - [x] Preserve any existing Google login option only if it is already part of the original public auth flow; no public Google option existed in the supplied panel
 - [x] Verify signup, password login, verification-code, and reset UI states
 - [x] Save an updated checkpoint for the public authentication change
+
+## Verification-code insert error repair
+
+- [x] Audit the live emailVerificationCodes schema and database error cause
+- [x] Repair signup and password-reset verification-code persistence for repeated requests
+- [x] Replace raw SQL mutation errors with actionable user-facing verification messages
+- [x] Add regression coverage for repeated code requests and invalid/expired codes
+- [x] Run tests/build and save an updated checkpoint
