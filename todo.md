@@ -167,3 +167,11 @@
 - [x] Set a native password for the current owner account without storing the plaintext password in source or logs
 - [x] Verify the current owner record has a password hash and remains admin/owner-authorized
 - [x] Save a checkpoint documenting the password registration without exposing the secret
+
+## Public authentication panel update
+
+- [x] Audit the public login panel for Manus and Google entry points
+- [x] Remove the public Manus login option while preserving native TanRyuGram email/password account creation and login
+- [x] Preserve any existing Google login option only if it is already part of the original public auth flow; no public Google option existed in the supplied panel
+- [x] Verify signup, password login, verification-code, and reset UI states
+- [x] Save an updated checkpoint for the public authentication change
