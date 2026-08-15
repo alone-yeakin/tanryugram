@@ -342,3 +342,9 @@
 - [x] Trace the remaining Vite client WebSocket injection in the hosted preview
 - [x] Disable the hosted HMR client injection while preserving normal development serving
 - [x] Validate browser console, tests, build, and save a repair checkpoint
+
+## Repeated hosted HMR WebSocket report
+
+- [x] Verify whether the reported WebSocket error is from a stale cached preview or current served HTML
+- [x] Refresh the preview path if needed and confirm no Vite client is loaded
+- [x] Validate and save the repair checkpoint
