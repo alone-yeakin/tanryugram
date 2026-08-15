@@ -286,3 +286,18 @@
 - [x] Fix the Explore navigation button and active-view behavior
 - [x] Make Explore render as a mobile-native responsive surface instead of a desktop webview-like layout
 - [x] Run desktop/mobile visual verification and save an updated checkpoint
+
+## Android APK and background-call delivery
+
+- [x] Audit the existing Expo mobile source, Android configuration, call signaling, and notification support
+- [x] Implement reliable incoming-call alerts for web users outside the active call screen
+- [x] Implement mobile background/foreground incoming-call notification handling with a call entry action
+- [ ] Prepare and run an Android APK build from the existing mobile source
+- [x] Validate call-alert behavior and document any platform or build limitations
+- [ ] Save a verified checkpoint and deliver the APK artifact when available
+
+## Android Studio / Gradle route clarification
+
+- [x] Replace the EAS-based mobile build plan with a standard Android Studio/Gradle APK build
+- [x] Audit and adapt the native Android project for background call notifications without EAS
+- [x] Document required Firebase or other native push credentials before closed-app call delivery

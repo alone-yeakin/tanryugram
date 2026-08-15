@@ -12,6 +12,7 @@ import * as db from "./db";
 import { eq, and, count, desc, sql } from "drizzle-orm";
 import { sdk } from "./_core/sdk";
 import { ENV } from "./_core/env";
+import { sendIncomingCallPush } from "./firebaseAdmin";
 import { users, messages, emailVerificationCodes } from "../drizzle/schema";
 
 const stripe = () => {
@@ -259,7 +260,7 @@ export const appRouter = router({
       return { success: true };
     }),
     getCall: protectedProcedure.input(z.object({ callId: z.number() })).query(({ input }) => db.getCall(input.callId)),
-    startCall: protectedProcedure.input(z.object({ receiverId: z.number(), callType: z.enum(["audio", "video"]) })).mutation(async ({ ctx, input }) => { try { const id = await db.createCall(ctx.user.id, input.receiverId, input.callType); await db.createNotification({ userId: input.receiverId, actorId: ctx.user.id, type: "message", content: `incoming ${input.callType} call` }); return id; } catch (error: any) { throw new TRPCError({ code: "CONFLICT", message: error?.message || "User is on another call" }); } }),
+    startCall: protectedProcedure.input(z.object({ receiverId: z.number(), callType: z.enum(["audio", "video"]) })).mutation(async ({ ctx, input }) => { try { const id = await db.createCall(ctx.user.id, input.receiverId, input.callType); await db.createNotification({ userId: input.receiverId, actorId: ctx.user.id, type: "message", content: `incoming ${input.callType} call` }); const caller = await db.getUserById(ctx.user.id); const tokens = await db.getUserPushTokens(input.receiverId); if (id) void sendIncomingCallPush(tokens, { callId: Number(id), callerName: caller?.name || "A TanRyuGram member", callType: input.callType }).catch(() => undefined); return id; } catch (error: any) { throw new TRPCError({ code: "CONFLICT", message: error?.message || "User is on another call" }); } }),
     signal: protectedProcedure.input(z.object({ callId: z.number(), signalData: z.string().min(1), status: z.enum(["pending", "accepted"]).optional() })).mutation(({ input }) => db.updateCallSignal(input.callId, input.signalData, input.status)),
     updateCall: protectedProcedure.input(z.object({ callId: z.number(), status: z.enum(["accepted", "declined", "missed", "ended"]), durationSeconds: z.number().optional() })).mutation(({ input }) => db.updateCall(input.callId, input.status, input.durationSeconds ?? 0)),
     groups: protectedProcedure.query(({ ctx }) => db.getGroupsForUser(ctx.user.id)),
