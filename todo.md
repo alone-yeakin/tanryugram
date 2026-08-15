@@ -354,3 +354,10 @@
 - [x] Inspect current public and preview HTML for any Vite client reference
 - [x] Refresh the preview process and verify the current browser session loads the new HTML
 - [x] Validate and save the final HMR verification checkpoint
+
+## Creator Studio and stable preview repair
+
+- [x] Diagnose why the current owner does not see the Creator Studio navigation entry
+- [x] Restore owner-only Creator Studio visibility using the authenticated owner identity
+- [x] Replace the fragile preview HMR behavior with a stable no-WebSocket setup
+- [x] Validate owner access, preview HTML, tests, and build, then save a checkpoint
