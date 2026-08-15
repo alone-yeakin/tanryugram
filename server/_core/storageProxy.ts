@@ -1,8 +1,7 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { ENV } from "./env";
 
-export function registerStorageProxy(app: Express) {
-  app.get("/manus-storage/*", async (req, res) => {
+async function serveStorageMedia(req: Request, res: Response) {
     const key = (req.params as Record<string, string>)[0];
     if (!key) {
       res.status(400).send("Missing storage key");
@@ -64,5 +63,11 @@ export function registerStorageProxy(app: Express) {
       console.error("[StorageProxy] failed:", err);
       res.status(502).send("Storage proxy error");
     }
-  });
+}
+
+export function registerStorageProxy(app: Express) {
+  // Keep the legacy storage route for stored records and uploads, while the
+  // app-owned route returns media bytes directly without platform redirects.
+  app.get("/manus-storage/*", serveStorageMedia);
+  app.get("/api/media-proxy/*", serveStorageMedia);
 }

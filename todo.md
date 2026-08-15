@@ -328,3 +328,11 @@
 - [x] Diagnose the hosted preview Vite HMR WebSocket connection failure
 - [x] Apply a compatible Vite HMR configuration and restart the development server
 - [x] Validate the preview and save the repair checkpoint
+
+## Cross-account media and people suggestions
+
+- [x] Diagnose why non-admin accounts receive broken profile and post media URLs
+- [x] Repair public cross-account avatar and post image delivery with regression coverage
+- [x] Rename “Worth following” to “People you may know”
+- [x] Add a consent-based location permission flow for nearby suggestions without exposing precise location publicly
+- [x] Validate mobile and desktop rendering, then save the repair checkpoint
