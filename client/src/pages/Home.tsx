@@ -18,6 +18,7 @@ import { ProfileFollowButton } from "@/components/ProfileFollowButton";
 import { CommentBottomSheet } from "@/components/CommentBottomSheet";
 import { SafeImage } from "@/components/SafeImage";
 import { canAccessCreatorStudio } from "@/lib/ownerAccess";
+import { shouldShowIncomingCall } from "@/lib/callPolling";
 
 const fallbackStories = [
   { name: "Your story", handle: "you", image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=180&q=80", own: true },
@@ -101,9 +102,10 @@ export default function Home() {
   const markNotificationsReadMutation = trpc.notifications.markRead.useMutation();
   const registerPushTokenMutation = trpc.notifications.registerPushToken.useMutation();
   const incomingCallsQuery = trpc.messages.incomingCalls.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 1200 });
-  const globalCallUpdateMutation = trpc.messages.updateCall.useMutation({ onSuccess: () => incomingCallsQuery.refetch() });
+  const globalCallUpdateMutation = trpc.messages.updateCall.useMutation({ onSuccess: (_data, variables) => { setDismissedCallId(variables.callId); window.dispatchEvent(new CustomEvent("tanryugram-call-state-changed", { detail: variables })); void incomingCallsQuery.refetch(); } });
   const announcedCallId = useRef<number | null>(null);
-  const pendingCall = incomingCallsQuery.data?.[0] as any;
+  const [dismissedCallId, setDismissedCallId] = useState<number | null>(null);
+  const pendingCall = incomingCallsQuery.data?.find((row: any) => shouldShowIncomingCall({ id: row.call?.id, status: row.call?.status }, dismissedCallId)) as any;
   useEffect(() => {
     const callId = Number(pendingCall?.call?.id || 0);
     if (!callId || announcedCallId.current === callId) return;
@@ -120,6 +122,24 @@ export default function Home() {
     window.addEventListener("tanryugram-native-push-token", handleNativePushToken);
     return () => window.removeEventListener("tanryugram-native-push-token", handleNativePushToken);
   }, [isAuthenticated, registerPushTokenMutation]);
+  useEffect(() => {
+    const handleNativeCallOpen = () => {
+      void incomingCallsQuery.refetch();
+      setView("home");
+      setShowNotifications(false);
+    };
+    const handleCallStateChanged = (event: Event) => {
+      const callId = Number((event as CustomEvent<{ callId?: number }>).detail?.callId || 0);
+      if (callId) setDismissedCallId(callId);
+      void incomingCallsQuery.refetch();
+    };
+    window.addEventListener("tanryugram-native-call-open", handleNativeCallOpen);
+    window.addEventListener("tanryugram-call-state-changed", handleCallStateChanged);
+    return () => {
+      window.removeEventListener("tanryugram-native-call-open", handleNativeCallOpen);
+      window.removeEventListener("tanryugram-call-state-changed", handleCallStateChanged);
+    };
+  }, [incomingCallsQuery]);
   // Payment mutations removed for beta stability
   const realPosts = feed.data?.map((row: any) => { const creator = row.creator || {}; return { id: row.post.id, userId: row.post.userId, creator: { userId: row.post.userId, name: creator.name || "Tanryugram creator", username: creator.username || `creator-${row.post.userId}`, avatar: creator.avatarUrl || null, verified: Boolean(creator.isVerified), role: creator.isCreator ? "Creator" : "Member" }, media: row.post.mediaUrl, caption: row.post.caption || "", likes: row.post.likesCount, comments: row.post.commentsCount, time: "Recently", tag: row.post.isPremium ? "PREMIUM" : "FROM THE COMMUNITY", premium: row.post.isPremium }; }) || [];
   const posts = realPosts.length ? realPosts : fallbackPosts;

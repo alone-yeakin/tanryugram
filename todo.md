@@ -417,3 +417,18 @@
 - [x] Fix Android debug packaging so the JavaScript bundle is embedded and Metro is not required
 - [x] Restore incoming-call home-screen notification, ringtone, and vibration behavior in the standalone APK
 - [x] Build and validate a corrected APK and refreshed source package
+
+## Android call reliability repair
+
+- [ ] Fix native call audio startup failure shown in the debug APK
+- [ ] Handle WebView microphone/camera permission requests for calls
+- [ ] Remove or simplify the startup splash activity if it blocks the call app flow
+- [ ] Ensure incoming calls surface through the home-screen/native notification path
+- [x] Build and validate a new APK and refreshed source package
+
+## Call acceptance and audio reliability follow-up
+
+- [x] Clear the incoming-call banner immediately when a call is accepted or declined
+- [x] Synchronize pending-call polling with accepted call state across Home and Messages
+- [x] Make remote WebRTC audio playback and speaker routing reliable after connection
+- [x] Add regression coverage and rebuild the APK/source package

@@ -17,3 +17,7 @@ const allowedTransitions: Record<CallStatus, readonly CallStatus[]> = {
 export function canTransitionCallStatus(from: CallStatus, to: CallStatus) {
   return from === to || allowedTransitions[from].includes(to);
 }
+
+export function shouldShowIncomingCall(call: { id?: number; status?: CallStatus } | null | undefined, dismissedCallId: number | null) {
+  return Boolean(call && call.status === "pending" && Number(call.id) !== dismissedCallId);
+}
