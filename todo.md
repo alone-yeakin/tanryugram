@@ -316,3 +316,9 @@
 
 - [x] Package the complete mobile Android Studio project into a ZIP
 - [x] Verify the ZIP contains the Android project and required mobile source files
+
+## Incoming-call ringtone enhancement
+
+- [x] Add a native Android incoming-call ringtone and vibration behavior
+- [x] Configure a high-priority call notification channel and call sound
+- [x] Rebuild and validate the Android Studio ZIP package
