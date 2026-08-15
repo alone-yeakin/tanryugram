@@ -75,22 +75,22 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
-        <div className="flex items-center justify-between">
+    <div className="mx-auto w-full max-w-7xl space-y-6 pb-8">
+      <div className="relative overflow-hidden rounded-[32px] border border-violet-200/70 bg-gradient-to-br from-violet-600 via-fuchsia-600 to-slate-950 p-5 text-white shadow-xl shadow-violet-500/10 sm:p-7">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500">Owner control center</p>
-            <h2 className="mt-1 font-display text-2xl font-bold">Tanryugram Owner Moderation Portal</h2>
-            <p className="mt-1 text-xs text-muted-foreground">Exclusive owner controls: assign blue or black badges, approve applications, assign creator labels, manage displayed follower counts, ban users, and moderate posts.</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-violet-100">TanRyuGram · Creator Studio</p>
+            <h2 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">Your command center.</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">Manage verification, creator access, audience presentation, uploads, and moderation from one focused workspace.</p>
           </div>
-          <span className="rounded-full bg-violet-500/10 px-3 py-1.5 text-xs font-bold text-violet-600">Owner Access Only</span>
+          <span className="w-fit rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white">Owner access</span>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-border/70 bg-muted/40 p-4">
+        <div className="relative mt-6 rounded-2xl border border-white/15 bg-black/15 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-semibold">Official Instagram Explore Integration</p>
-              <p className="text-[11px] text-muted-foreground">Connect via official API authorization to pull reels and media directly into Explore.</p>
+              <p className="text-xs font-semibold text-white">Official Instagram Explore Integration</p>
+              <p className="text-[11px] text-white/65">Connect via official API authorization to pull reels and media directly into Explore.</p>
             </div>
             <div className="flex items-center gap-2">
               {instagramConnected ? (

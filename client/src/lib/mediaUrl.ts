@@ -43,6 +43,10 @@ export function normalizeMediaUrl(value?: string | null) {
     if (parsed.pathname.includes("/manus-storage/")) {
       return `${parsed.pathname}${parsed.search}`;
     }
+    const legacyProxy = parsed.pathname.match(/\/api\/media-proxy\/(.+)$/);
+    if (legacyProxy?.[1]) {
+      return `/manus-storage/${legacyProxy[1]}${parsed.search}`;
+    }
     return parsed.href;
   } catch {
     const key = raw.replace(/^\/+/, "");

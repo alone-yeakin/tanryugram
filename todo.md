@@ -309,3 +309,42 @@
 - [x] Add a website section that directly downloads the final APK
 - [x] Configure Firebase Android client support as far as available and document account-dependent steps
 - [x] Rebuild, validate, and deliver the final APK/source package
+
+## Profile navigation and social controls repair
+
+- [x] Make names and photos open the correct selected profile
+- [x] Repair the Follow/Following button state and mutation flow
+- [x] Restore follower and following counts/lists for the selected profile
+- [x] Add regression coverage and publish the verified fix
+
+## Regression repair: owner portal, media, and profiles
+
+- [x] Restore Creator Studio visibility and owner portal access for the current owner
+- [x] Restore same-origin media proxy normalization for avatars and post photos
+- [x] Repair selected-profile navigation and Follow/follower controls without removing existing panels
+- [x] Add regression coverage, verify the owner surface, and publish the repair
+
+## Creator Studio web redesign
+
+- [x] Restore owner Creator Studio access without removing badge and moderation tools
+- [x] Redesign Creator Studio into a clean responsive web dashboard
+- [x] Preserve cross-account media and selected-profile/social fixes while redesigning the studio
+- [x] Add visual/regression verification and publish the repaired owner experience
+
+## Production and universal APK regression repair
+
+- [x] Verify Creator Studio owner visibility on the deployed website, not only preview
+- [x] Restore cross-account photo/avatar delivery on production
+- [x] Ensure the Home incoming-call surface refreshes and presents calls consistently
+- [x] Build a universal APK containing arm64-v8a, armeabi-v7a, and x86_64 where supported
+- [x] Run production/live-route regression checks and publish the repair
+
+## Profile badge rendering regression
+
+- [x] Preserve badgeType, badgeLabel, creator, and verification fields through profile queries
+- [x] Render custom badge levels consistently on profile, post, and message identity surfaces
+- [x] Add badge regression coverage and include it in the final publish validation
+
+- [x] Final delivery: render persisted custom badge labels/types on feed author surfaces
+- [x] Final delivery: point Get the app to the signed universal-compatible Android debug APK
+- [x] Final delivery: validate universal APK ABI contents, tests, production build, archive, and checkpoint

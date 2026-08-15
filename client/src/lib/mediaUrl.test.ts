@@ -12,6 +12,10 @@ describe("portable Tanryugram media URLs", () => {
     expect(normalizeMediaUrl("blob:https://phone.invalid/local-only")).toBe("");
   });
 
+  it("rewrites legacy API proxy URLs to the active storage proxy", () => {
+    expect(normalizeMediaUrl("https://example.com/api/media-proxy/users/1/avatar.webp")).toBe("/manus-storage/users/1/avatar.webp");
+  });
+
   it("provides stable visible fallbacks when a remote image cannot load", () => {
     expect(initialsFor("Ashikul Islam")).toBe("AI");
     expect(initialsAvatar("Ashikul Islam")).toMatch(/^data:image\/svg\+xml/);
