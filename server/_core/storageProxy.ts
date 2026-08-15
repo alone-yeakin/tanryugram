@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { ENV } from "./env";
 
-const APK_KEY = "TanRyuGram-universal-firebase-debug_70fa8937.apk";
+const APK_KEY = "TanRyuGram-universal-firebase-installable_6d63cde6.apk";
 
 async function fetchStoredObject(key: string, res: Response, downloadName?: string) {
   if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
@@ -41,7 +41,8 @@ async function fetchStoredObject(key: string, res: Response, downloadName?: stri
     }
 
     const contentLength = Number(mediaResp.headers.get("content-length") || 0);
-    if (contentLength > 50 * 1024 * 1024) {
+    const maxBytes = key.toLowerCase().endsWith(".apk") ? 200 * 1024 * 1024 : 50 * 1024 * 1024;
+    if (contentLength > maxBytes) {
       res.status(413).send("Stored media is too large to proxy");
       return;
     }

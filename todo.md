@@ -386,3 +386,10 @@
 - [x] Replace redirect/text delivery with a binary-safe APK response
 - [x] Validate live content type, bytes, APK integrity, and installation metadata
 - [x] Publish the corrected Get the app download and deliver the verified APK
+
+## Android installer rejection after binary-download repair
+
+- [x] Inspect APK certificate lineage, manifest compatibility, zip alignment, and native-library packaging against the target-device rejection
+- [x] Build a clean device-compatible APK without manually mixing stale ABI libraries
+- [x] Validate installer metadata, signature, archive integrity, and live downloaded bytes
+- [ ] Publish the corrected device-compatible APK and update the Get the app route
