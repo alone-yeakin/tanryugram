@@ -411,3 +411,9 @@
 - [x] Locate any existing TanRyuGram debug APK and Android build outputs
 - [x] Assemble a fresh debug APK if the environment supports the required Android SDK
 - [x] Validate the APK and attach it with the complete source package
+
+## Standalone Android APK and incoming calls
+
+- [x] Fix Android debug packaging so the JavaScript bundle is embedded and Metro is not required
+- [x] Restore incoming-call home-screen notification, ringtone, and vibration behavior in the standalone APK
+- [x] Build and validate a corrected APK and refreshed source package
