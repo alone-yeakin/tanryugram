@@ -378,4 +378,4 @@
 - [x] Inspect the delivered APK with Android packaging tools and compare it with the live download response
 - [x] Produce a clean installable universal debug APK with correct archive and signing structure
 - [x] Point the Home Get the app button to the verified downloadable APK endpoint
-- [ ] Validate package metadata, signature, ABI coverage, download headers, and publish the repair
+- [x] Validate package metadata, signature, ABI coverage, download headers, and publish the repair
