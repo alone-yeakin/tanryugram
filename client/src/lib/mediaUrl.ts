@@ -30,29 +30,23 @@ export function initialsAvatar(name?: string | null) {
  * Blob URLs are intentionally rejected because they only exist on the device
  * that created them and can never render for another account or device.
  */
-function appMediaProxyPath(key: string) {
-  return `/api/media-proxy/${key.replace(/^\/+/, "").replace(/^manus-storage\//, "")}`;
-}
-
 export function normalizeMediaUrl(value?: string | null) {
   if (!value) return "";
   const raw = value.trim();
   if (!raw || raw.startsWith("blob:")) return "";
   if (raw.startsWith("data:")) return raw;
-  if (!raw.includes("://") && !raw.startsWith("/")) return appMediaProxyPath(raw);
+  if (!raw.includes("://") && !raw.startsWith("/")) return `/manus-storage/${raw.replace(/^manus-storage\//, "")}`;
 
   try {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://tanryugram.invalid";
     const parsed = new URL(raw, origin);
     if (parsed.pathname.includes("/manus-storage/")) {
-      const key = parsed.pathname.split("/manus-storage/")[1] || "";
-      return `${appMediaProxyPath(key)}${parsed.search}`;
+      return `${parsed.pathname}${parsed.search}`;
     }
-    if (parsed.pathname.includes("/api/media-proxy/")) return `${parsed.pathname}${parsed.search}`;
     return parsed.href;
   } catch {
     const key = raw.replace(/^\/+/, "");
-    return appMediaProxyPath(key);
+    return key.startsWith("manus-storage/") ? `/${key}` : `/manus-storage/${key}`;
   }
 }
 

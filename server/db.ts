@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { eq, and, or, like, desc, sql, inArray } from "drizzle-orm";
 import { ENV } from "./_core/env";
 import { resolveDisplayedFollowerCount } from "./followerStats";
-import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, storyReplies, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
+import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
@@ -156,6 +156,7 @@ export async function updateCall(callId: number, status: "accepted" | "declined"
 export async function updateCallSignal(callId: number, signalData: string, status?: "pending" | "accepted") { const db = await getDb(); if (!db) return; await db.update(calls).set({ signalData, status }).where(eq(calls.id, callId)); }
 export async function getCall(callId: number) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(calls).where(eq(calls.id, callId)).limit(1))[0]; }
 export async function getCallHistory(userId: number, otherUserId: number) { const db = await getDb(); if (!db) return []; return db.select().from(calls).where(or(and(eq(calls.callerId, userId), eq(calls.receiverId, otherUserId)), and(eq(calls.callerId, otherUserId), eq(calls.receiverId, userId)))).orderBy(desc(calls.startedAt)).limit(50); }
+export async function getRecentCallHistory(userId: number) { const db = await getDb(); if (!db) return []; return db.select({ call: calls, peer: users }).from(calls).innerJoin(users, or(and(eq(calls.callerId, userId), eq(calls.receiverId, users.id)), and(eq(calls.receiverId, userId), eq(calls.callerId, users.id)))).where(or(eq(calls.callerId, userId), eq(calls.receiverId, userId))).orderBy(desc(calls.startedAt)).limit(12); }
 export async function getPendingIncomingCalls(userId: number) {
   const db = await getDb();
   if (!db) return [];
@@ -180,10 +181,6 @@ export async function getActiveStories() { const db = await getDb(); if (!db) re
 export async function recordStoryView(storyId: number, viewerId: number) { const db = await getDb(); if (!db) return; const exists = await db.select().from(storyViews).where(and(eq(storyViews.storyId, storyId), eq(storyViews.viewerId, viewerId))).limit(1); if (exists.length === 0) await db.insert(storyViews).values({ storyId, viewerId }); }
 export async function getStoryViewers(storyId: number) { const db = await getDb(); if (!db) return []; return db.select({ viewer: users, view: storyViews }).from(storyViews).innerJoin(users, eq(storyViews.viewerId, users.id)).where(eq(storyViews.storyId, storyId)).orderBy(desc(storyViews.viewedAt)); }
 export async function getStoryViewCount(storyId: number) { const db = await getDb(); if (!db) return 0; const rows = await db.select({ count: sql<number>`COUNT(*)` }).from(storyViews).where(eq(storyViews.storyId, storyId)); return Number(rows[0]?.count ?? 0); }
-export async function addStoryReply(storyId: number, senderId: number, content: string) { const db = await getDb(); if (!db) return undefined; const story = (await db.select().from(stories).where(eq(stories.id, storyId)).limit(1))[0]; if (!story || story.expiresAt <= new Date()) return undefined; return (await db.insert(storyReplies).values({ storyId, senderId, content: content.trim() }))[0]?.insertId; }
-export async function getStoryOwnerId(storyId: number) { const db = await getDb(); if (!db) return undefined; const row = (await db.select({ userId: stories.userId }).from(stories).where(eq(stories.id, storyId)).limit(1))[0]; return row?.userId; }
-export async function getStoryReplies(storyId: number) { const db = await getDb(); if (!db) return []; return db.select({ reply: storyReplies, sender: publicCreatorFields }).from(storyReplies).leftJoin(users, eq(storyReplies.senderId, users.id)).where(eq(storyReplies.storyId, storyId)).orderBy(desc(storyReplies.createdAt)).limit(100); }
-export async function deleteStory(storyId: number, userId: number) { const db = await getDb(); if (!db) return false; const story = (await db.select({ id: stories.id }).from(stories).where(and(eq(stories.id, storyId), eq(stories.userId, userId))).limit(1))[0]; if (!story) return false; await db.delete(storyReplies).where(eq(storyReplies.storyId, storyId)); await db.delete(storyViews).where(eq(storyViews.storyId, storyId)); await db.delete(stories).where(eq(stories.id, storyId)); return true; }
 export async function deleteExpiredStories() { const db = await getDb(); if (!db) return; await db.delete(stories).where(sql`${stories.expiresAt} <= NOW()`); }
 export async function registerPushToken(userId: number, token: string) {
   const db = await getDb();

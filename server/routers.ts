@@ -229,9 +229,6 @@ export const appRouter = router({
     create: protectedProcedure.input(z.object({ mediaUrl: z.string().min(1), mediaType: z.enum(["image", "video"]) })).mutation(async ({ ctx, input }) => { await validateMediaUpload(input.mediaType === "image" ? "image/jpeg" : "video/mp4"); return db.addStory(ctx.user.id, input.mediaUrl, input.mediaType); }),
     view: protectedProcedure.input(z.object({ storyId: z.number() })).mutation(({ ctx, input }) => db.recordStoryView(input.storyId, ctx.user.id)),
     viewers: protectedProcedure.input(z.object({ storyId: z.number() })).query(async ({ input }) => ({ count: await db.getStoryViewCount(input.storyId), viewers: await db.getStoryViewers(input.storyId) })),
-    replies: protectedProcedure.input(z.object({ storyId: z.number() })).query(async ({ ctx, input }) => { const ownerId = await db.getStoryOwnerId(input.storyId); if (ownerId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "Only the story owner can view replies." }); return db.getStoryReplies(input.storyId); }),
-    reply: protectedProcedure.input(z.object({ storyId: z.number(), content: z.string().trim().min(1).max(500) })).mutation(({ ctx, input }) => db.addStoryReply(input.storyId, ctx.user.id, input.content)),
-    delete: protectedProcedure.input(z.object({ storyId: z.number() })).mutation(async ({ ctx, input }) => { const deleted = await db.deleteStory(input.storyId, ctx.user.id); if (!deleted) throw new TRPCError({ code: "FORBIDDEN", message: "Only the story owner can delete this story." }); return { success: true }; }),
     removeExpired: ownerOnly.mutation(() => db.deleteExpiredStories()),
   }),
   messages: router({
@@ -243,6 +240,7 @@ export const appRouter = router({
     react: protectedProcedure.input(z.object({ messageId: z.number(), emoji: z.string().min(1).max(8) })).mutation(({ ctx, input }) => db.toggleMessageReaction(input.messageId, ctx.user.id, input.emoji)),
     delete: protectedProcedure.input(z.object({ messageId: z.number(), everyone: z.boolean() })).mutation(({ ctx, input }) => db.deleteMessage(input.messageId, ctx.user.id, input.everyone)),
     calls: protectedProcedure.input(z.object({ otherUserId: z.number() })).query(({ ctx, input }) => db.getCallHistory(ctx.user.id, input.otherUserId)),
+    recentCalls: protectedProcedure.query(({ ctx }) => db.getRecentCallHistory(ctx.user.id)),
     incomingCalls: protectedProcedure.query(({ ctx }) => db.getPendingIncomingCalls(ctx.user.id)),
     settingsGet: protectedProcedure.input(z.object({ peerId: z.number() })).query(({ ctx, input }) => db.getConversationSettings(ctx.user.id, input.peerId)),
     settingsUpdate: protectedProcedure.input(z.object({ peerId: z.number(), isPinned: z.boolean().optional(), isArchived: z.boolean().optional(), isMuted: z.boolean().optional(), themeColor: z.string().optional() })).mutation(({ ctx, input }) => db.updateConversationSettings(ctx.user.id, input.peerId, input)),

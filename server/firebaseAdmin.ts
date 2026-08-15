@@ -33,7 +33,7 @@ export async function sendIncomingCallPush(tokens: string[], payload: { callId: 
     android: {
       priority: "high",
       notification: {
-        channelId: "calls_v2",
+        channelId: "calls_default",
         sound: "default",
         defaultVibrateTimings: true,
         visibility: "public",

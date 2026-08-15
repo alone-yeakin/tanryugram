@@ -6,23 +6,12 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import viteConfig from "../../vite.config";
 
-export function getViteServerOptions() {
-  return {
-    middlewareMode: true as const,
-    // The hosted preview terminates HTTP at a public proxy while Vite’s
-    // internal middleware socket remains on localhost:5173. Disable the
-    // unreachable HMR socket to prevent noisy client WebSocket failures.
-    hmr: false as const,
+export async function setupVite(app: Express, server: Server) {
+  const serverOptions = {
+    middlewareMode: true,
+    hmr: { server },
     allowedHosts: true as const,
   };
-}
-
-export function stripHostedViteClient(page: string) {
-  return page.replace(/<script[^>]+src=["']\/?@vite\/client["'][^>]*><\/script>\s*/g, "");
-}
-
-export async function setupVite(app: Express, _server: Server) {
-  const serverOptions = getViteServerOptions();
 
   const vite = await createViteServer({
     ...viteConfig,
@@ -49,14 +38,8 @@ export async function setupVite(app: Express, _server: Server) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`
       );
-      const transformedPage = await vite.transformIndexHtml(url, template);
-      const page = stripHostedViteClient(transformedPage);
-      res.status(200).set({
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-      }).end(page);
+      const page = await vite.transformIndexHtml(url, template);
+      res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);

@@ -10,7 +10,7 @@ function expectProcedures(router: any, names: string[]) {
 
 describe("Tanryugram major feature contracts", () => {
   it("exposes the story viewer lifecycle procedures", () => {
-    expectProcedures(caller.stories, ["list", "create", "view", "viewers", "replies", "reply", "delete"]);
+    expectProcedures(caller.stories, ["list", "create", "view", "viewers"]);
   });
 
   it("exposes six-reaction and carousel post procedures", () => {
@@ -18,7 +18,7 @@ describe("Tanryugram major feature contracts", () => {
   });
 
   it("exposes Messenger reply, voice, deletion, and call procedures", () => {
-    expectProcedures(caller.messages, ["list", "send", "react", "delete", "startCall", "getCall", "signal", "updateCall"]);
+    expectProcedures(caller.messages, ["list", "send", "react", "delete", "startCall", "getCall", "signal", "updateCall", "recentCalls"]);
   });
 
   it("exposes member-aware group creation and group conversation procedures", () => {

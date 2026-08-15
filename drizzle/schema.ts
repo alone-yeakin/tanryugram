@@ -249,14 +249,6 @@ export const storyViews = mysqlTable("storyViews", {
   viewedAt: timestamp("viewedAt").defaultNow().notNull(),
 });
 
-export const storyReplies = mysqlTable("storyReplies", {
-  id: int("id").autoincrement().primaryKey(),
-  storyId: int("storyId").notNull(),
-  senderId: int("senderId").notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
 export const messages = mysqlTable("messages", {
   id: int("id").autoincrement().primaryKey(),
   senderId: int("senderId").notNull(),
