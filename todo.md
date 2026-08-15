@@ -364,4 +364,4 @@
 - [x] Trace feed, profile, Messenger, and post-media API payloads for owner/non-owner differences
 - [x] Repair server-side media access and API error handling so stored photos are public to authorized signed-in users
 - [x] Repair the website Get the app download route and validate the hosted APK asset
-- [ ] Add regression coverage, test owner/non-owner production paths, and publish the repair
+- [x] Add regression coverage, test owner/non-owner production paths, and publish the repair

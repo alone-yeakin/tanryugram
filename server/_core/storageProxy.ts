@@ -87,10 +87,12 @@ export function registerStorageProxy(app: Express) {
   // below because some production hosts intercept /manus-storage with a redirect.
   app.get("/manus-storage/*", handleMedia);
   app.get("/api/media-proxy/*", handleMedia);
-  app.get("/api/download/tanryugram.apk", (_req, res) => {
+  const redirectToApk = (_req: Request, res: Response) => {
     // Webdev-hosted APK assets are served by the platform CDN rather than the
     // Forge bucket used for user media. Redirecting to the verified asset keeps
     // this API stable while allowing browsers to download the binary.
     res.redirect(302, `/manus-storage/${APK_KEY}`);
-  });
+  };
+  app.get("/api/download/tanryugram.apk", redirectToApk);
+  app.get("/api/download/tanryugram-v2.apk", redirectToApk);
 }
