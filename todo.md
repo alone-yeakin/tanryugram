@@ -359,9 +359,9 @@
 
 ## Production media/API regression: non-owner visibility
 
-- [ ] Reproduce the live non-owner failure for post photos and profile avatars
-- [ ] Verify media proxy status, redirects, content types, and storage-key permissions on production
-- [ ] Trace feed, profile, Messenger, and post-media API payloads for owner/non-owner differences
-- [ ] Repair server-side media access and API error handling so stored photos are public to authorized signed-in users
-- [ ] Repair the website Get the app download route and validate the hosted APK asset
+- [x] Reproduce the live non-owner failure for post photos and profile avatars
+- [x] Verify media proxy status, redirects, content types, and storage-key permissions on production
+- [x] Trace feed, profile, Messenger, and post-media API payloads for owner/non-owner differences
+- [x] Repair server-side media access and API error handling so stored photos are public to authorized signed-in users
+- [x] Repair the website Get the app download route and validate the hosted APK asset
 - [ ] Add regression coverage, test owner/non-owner production paths, and publish the repair
