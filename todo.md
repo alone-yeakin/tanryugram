@@ -301,3 +301,18 @@
 - [x] Replace the EAS-based mobile build plan with a standard Android Studio/Gradle APK build
 - [x] Audit and adapt the native Android project for background call notifications without EAS
 - [x] Document required Firebase or other native push credentials before closed-app call delivery
+
+## Compiled APK delivery retry
+
+- [x] Retry the standard Gradle build; Gradle reached dex packaging but stalled and was stopped without producing an APK artifact
+- [x] Verify the APK output directory after the final retry; no compiled APK exists to attach
+
+## Final APK artifact recovery attempt
+
+- [x] Inspect all Android build outputs; no valid APK artifact was produced
+- [x] Make the final constrained APK packaging attempt; Gradle reached CMake packaging and terminated before producing an APK
+
+## Android Studio ZIP delivery
+
+- [x] Package the complete mobile Android Studio project into a ZIP
+- [x] Verify the ZIP contains the Android project and required mobile source files
