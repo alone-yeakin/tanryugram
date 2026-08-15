@@ -10,7 +10,7 @@ function expectProcedures(router: any, names: string[]) {
 
 describe("Tanryugram major feature contracts", () => {
   it("exposes the story viewer lifecycle procedures", () => {
-    expectProcedures(caller.stories, ["list", "create", "view", "viewers"]);
+    expectProcedures(caller.stories, ["list", "create", "view", "viewers", "replies", "reply", "delete"]);
   });
 
   it("exposes six-reaction and carousel post procedures", () => {

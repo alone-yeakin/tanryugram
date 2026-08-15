@@ -389,10 +389,10 @@
 
 ## Feed loading and story interactions
 
-- [ ] Add an animated feed loading skeleton while posts are loading
-- [ ] Add story replies with authenticated sender and story-owner visibility
-- [ ] Add owner-only story deletion with backend permission enforcement
-- [ ] Validate responsive feed/story flows and save a checkpoint
+- [x] Add an animated feed loading skeleton while posts are loading
+- [x] Add story replies with authenticated sender and story-owner visibility
+- [x] Add owner-only story deletion with backend permission enforcement
+- [x] Validate responsive feed/story flows and save a checkpoint
 
 ## Windows PowerShell Android build wrapper
 

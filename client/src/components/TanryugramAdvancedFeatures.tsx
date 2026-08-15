@@ -24,6 +24,7 @@ function dataUrl(file: Blob) {
 }
 
 export function StoryBarLive({ onOpen }: { onOpen: (story: any, allStories?: any[]) => void }) {
+  const { user } = useAuth();
   const storyQuery = trpc.stories.list.useQuery();
   const upload = trpc.media.uploadBase64.useMutation();
   const policyQuery = trpc.media.policy.useQuery();
@@ -33,7 +34,7 @@ export function StoryBarLive({ onOpen }: { onOpen: (story: any, allStories?: any
   const [uploadProgress, setUploadProgress] = useState(0);
   const rows = storyQuery.data ?? [];
   const policy = policyQuery.data || { photosEnabled: true, videosEnabled: false };
-  const stories = rows.length ? rows.map((row: any) => { const owner = row.owner || {}; return { id: row.story.id, name: owner.name || "Tanryugram creator", handle: owner.username || `creator-${row.story.userId}`, image: owner.avatarUrl || null, mediaUrl: row.story.mediaUrl, mediaType: row.story.mediaType, expiresAt: row.story.expiresAt, own: false }; }) : storyFallback;
+  const stories = rows.length ? rows.map((row: any) => { const owner = row.owner || {}; return { id: row.story.id, ownerId: row.story.userId, name: owner.name || "Tanryugram creator", handle: owner.username || `creator-${row.story.userId}`, image: owner.avatarUrl || null, mediaUrl: row.story.mediaUrl, mediaType: row.story.mediaType, expiresAt: row.story.expiresAt, own: Number(user?.id || 0) === Number(row.story.userId) }; }) : storyFallback;
   const addStory = async (file?: File) => {
     if (!file) return;
     if (!policy.photosEnabled) { toast.error("Photo uploads are temporarily paused by the owner"); return; }
@@ -70,25 +71,30 @@ export function StoryBarLive({ onOpen }: { onOpen: (story: any, allStories?: any
 export function StoryViewerLive({ story, onClose, onNext, onPrevious }: { story: any; onClose: () => void; onNext?: () => void; onPrevious?: () => void }) {
   const viewMutation = trpc.stories.view.useMutation();
   const viewerQuery = trpc.stories.viewers.useQuery({ storyId: Number(story?.id || 0) }, { enabled: Boolean(story?.id) });
+  const repliesQuery = trpc.stories.replies.useQuery({ storyId: Number(story?.id || 0) }, { enabled: Boolean(story?.id) && Boolean(story?.own), retry: false });
+  const replyMutation = trpc.stories.reply.useMutation({ onSuccess: () => { setReplyText(""); repliesQuery.refetch(); toast.success("Reply sent to the story owner"); } });
+  const deleteMutation = trpc.stories.delete.useMutation({ onSuccess: () => { toast.success("Story deleted"); onClose(); } });
   const [progress, setProgress] = useState(0);
+  const [replyText, setReplyText] = useState("");
   const startX = useRef<number | null>(null);
   const startY = useRef<number | null>(null);
   useEffect(() => {
     if (!story) return;
     if (story.id) viewMutation.mutate({ storyId: Number(story.id) });
     const began = Date.now();
-    const ticker = window.setInterval(() => setProgress(Math.min(100, ((Date.now() - began) / 5000) * 100)), 80);
-    const advance = window.setTimeout(() => (onNext || onClose)(), 5000);
+    const ticker = window.setInterval(() => setProgress(Math.min(100, ((Date.now() - began) / 8000) * 100)), 80);
+    const advance = window.setTimeout(() => (onNext || onClose)(), 8000);
     return () => { window.clearInterval(ticker); window.clearTimeout(advance); };
   }, [story, onClose, onNext]);
   if (!story) return null;
   const media = story.mediaUrl || story.image;
+  const submitReply = (event: React.FormEvent) => { event.preventDefault(); const content = replyText.trim(); if (!content || !story.id || replyMutation.isPending) return; replyMutation.mutate({ storyId: Number(story.id), content }); };
   return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-3 backdrop-blur-sm" onPointerDown={(event) => { startX.current = event.clientX; startY.current = event.clientY; }} onPointerUp={(event) => { if (startY.current !== null && event.clientY - startY.current > 80) onClose(); startX.current = null; startY.current = null; }} onClick={onClose}>
     <div className="relative h-[min(780px,94vh)] w-full max-w-[430px] overflow-hidden rounded-[30px] bg-zinc-950 shadow-2xl" onClick={(event) => event.stopPropagation()}>
       {story.mediaType === "video" ? <video src={media} autoPlay playsInline className="h-full w-full object-cover" /> : <SafeImage src={media} fallbackName={story.name} alt="Story" className="h-full w-full object-cover" />}
-      <div className="absolute inset-x-4 top-4"><div className="h-1 overflow-hidden rounded-full bg-white/25"><div className="h-full rounded-full bg-white transition-[width]" style={{ width: `${progress}%` }} /></div><div className="mt-4 flex items-center gap-3"><div className="rounded-full bg-white/30 p-0.5"><SafeImage src={story.image || media} fallbackName={story.name} className="h-9 w-9 rounded-full object-cover" alt={story.name || "Story"} /></div><div><p className="text-sm font-semibold text-white">{story.name}</p><p className="text-[10px] text-white/70">@{story.handle || "creator"}</p></div><button onClick={onClose} className="ml-auto rounded-full bg-black/30 p-2 text-white"><X className="h-4 w-4" /></button></div></div>
+      <div className="absolute inset-x-4 top-4"><div className="h-1 overflow-hidden rounded-full bg-white/25"><div className="h-full rounded-full bg-white transition-[width]" style={{ width: `${progress}%` }} /></div><div className="mt-4 flex items-center gap-3"><div className="rounded-full bg-white/30 p-0.5"><SafeImage src={story.image || media} fallbackName={story.name} className="h-9 w-9 rounded-full object-cover" alt={story.name || "Story"} /></div><div><p className="text-sm font-semibold text-white">{story.name}</p><p className="text-[10px] text-white/70">@{story.handle || "creator"}</p></div>{story.own && <button aria-label="Delete story" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate({ storyId: Number(story.id) })} className="ml-auto rounded-full bg-rose-500/80 p-2 text-white disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>}<button onClick={onClose} className={`${story.own ? "" : "ml-auto"} rounded-full bg-black/30 p-2 text-white`}><X className="h-4 w-4" /></button></div></div>
       <button aria-label="Previous story" onClick={() => (onPrevious || onClose)()} className="absolute inset-y-0 left-0 w-1/3"><ChevronLeft className="ml-2 h-7 w-7 text-white/0 hover:text-white" /></button><button aria-label="Next story" onClick={() => (onNext || onClose)()} className="absolute inset-y-0 right-0 w-1/3"><ChevronRight className="ml-auto mr-2 h-7 w-7 text-white/0 hover:text-white" /></button>
-      <div className="absolute bottom-5 left-5 right-5 rounded-2xl bg-black/30 p-3 text-white backdrop-blur"><div className="flex items-center justify-between"><span className="text-xs">{story.own ? `${viewerQuery.data?.count ?? 0} views` : "Reply to this story"}</span>{story.own && <span className="text-[10px] text-white/70">Viewer list</span>}</div>{story.own && <div className="mt-2 flex gap-1.5">{(viewerQuery.data?.viewers ?? []).slice(0, 8).map((entry: any) => <SafeImage key={entry.viewer.id} src={entry.viewer.avatarUrl || media} fallbackName={entry.viewer.name || "Viewer"} className="h-6 w-6 rounded-full border border-white/40 object-cover" alt={entry.viewer.name || "Viewer"} />)}</div>}</div>
+      <div className="absolute bottom-5 left-5 right-5 rounded-2xl bg-black/35 p-3 text-white backdrop-blur"><div className="flex items-center justify-between"><span className="text-xs">{story.own ? String(viewerQuery.data?.count ?? 0) + " views" : "Reply to this story"}</span>{story.own && <span className="text-[10px] text-white/70">{repliesQuery.data?.length ?? 0} replies</span>}</div>{story.own ? <div className="mt-2 max-h-24 space-y-1 overflow-y-auto">{(repliesQuery.data ?? []).slice(0, 4).map((entry: any) => <p key={entry.reply.id} className="truncate text-[11px]"><span className="font-semibold">{entry.sender?.name || "Member"}</span> {entry.reply.content}</p>)}</div> : <form onSubmit={submitReply} className="mt-2 flex items-center gap-2"><input value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder="Write a reply…" maxLength={500} className="min-w-0 flex-1 rounded-xl bg-white/15 px-3 py-2 text-xs text-white placeholder:text-white/60 outline-none ring-1 ring-white/10 focus:ring-white/30" /><button type="submit" disabled={!replyText.trim() || replyMutation.isPending} aria-label="Send story reply" className="rounded-xl bg-white p-2 text-zinc-900 disabled:opacity-50"><Send className="h-4 w-4" /></button></form>}{story.own && <div className="mt-2 flex gap-1.5">{(viewerQuery.data?.viewers ?? []).slice(0, 8).map((entry: any) => <SafeImage key={entry.viewer.id} src={entry.viewer.avatarUrl || media} fallbackName={entry.viewer.name || "Viewer"} className="h-6 w-6 rounded-full border border-white/40 object-cover" alt={entry.viewer.name || "Viewer"} />)}</div>}</div>
     </div>
   </div>;
 }
