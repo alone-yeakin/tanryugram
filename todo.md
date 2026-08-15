@@ -379,3 +379,10 @@
 - [x] Verify the deployed owner session and Creator Studio route for realaayan.apple@gmail.com
 - [x] Repair owner routing or data-state mismatch without replacing the original design
 - [x] Validate owner and non-owner behavior, then save a checkpoint
+
+## Non-admin media verification and unified package
+
+- [x] Verify post and profile media delivery for a non-admin account
+- [x] Fix any remaining media permission or URL issue and add regression coverage
+- [x] Package full source, mobile Android project, and automated build instructions into one archive
+- [x] Validate the archive and save a delivery checkpoint
