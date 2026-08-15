@@ -365,3 +365,10 @@
 - [x] Repair server-side media access and API error handling so stored photos are public to authorized signed-in users
 - [x] Repair the website Get the app download route and validate the hosted APK asset
 - [x] Add regression coverage, test owner/non-owner production paths, and publish the repair
+
+## Automatic Firebase-backed final APK build
+
+- [x] Validate the supplied google-services.json for package com.tanryugram without exposing its contents
+- [x] Build the final universal debug APK with Firebase client configuration and unchanged application code
+- [x] Verify APK signature, ABI coverage, Firebase resources, and package integrity
+- [x] Deliver the final APK and updated private source package location
