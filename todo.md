@@ -379,3 +379,10 @@
 - [x] Produce a clean installable universal debug APK with correct archive and signing structure
 - [x] Point the Home Get the app button to the verified downloadable APK endpoint
 - [x] Validate package metadata, signature, ABI coverage, download headers, and publish the repair
+
+## APK download binary-response regression
+
+- [x] Reproduce the live download chain that exposes signed-storage URL text to Android
+- [x] Replace redirect/text delivery with a binary-safe APK response
+- [x] Validate live content type, bytes, APK integrity, and installation metadata
+- [ ] Publish the corrected Get the app download and deliver the verified APK

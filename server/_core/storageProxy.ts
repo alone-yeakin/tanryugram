@@ -87,12 +87,42 @@ export function registerStorageProxy(app: Express) {
   // below because some production hosts intercept /manus-storage with a redirect.
   app.get("/manus-storage/*", handleMedia);
   app.get("/api/media-proxy/*", handleMedia);
-  const redirectToApk = (_req: Request, res: Response) => {
-    // Webdev-hosted APK assets are served by the platform CDN rather than the
-    // Forge bucket used for user media. Redirecting to the verified asset keeps
-    // this API stable while allowing browsers to download the binary.
-    res.redirect(302, `/manus-storage/${APK_KEY}`);
+  const sendApk = async (req: Request, res: Response) => {
+    // Stream the hosted asset from the server so Android never receives a
+    // redirect body or a signed-storage URL as the downloaded file contents.
+    const requestHost = req.get("host") || "";
+    const origin = /^(localhost|127\\.0\\.0\\.1)(:\\d+)?$/i.test(requestHost)
+      ? "https://tanryugram-njs4tc3o.manus.space"
+      : `${req.protocol}://${requestHost}`;
+    const assetUrl = `${origin}/manus-storage/${encodeURIComponent(APK_KEY)}`;
+
+    try {
+      const assetResp = await fetch(assetUrl, {
+        headers: { Accept: "application/vnd.android.package-archive, application/octet-stream" },
+      });
+      if (!assetResp.ok) {
+        console.error(`[StorageProxy] APK asset error: ${assetResp.status}`);
+        res.status(502).send("APK asset unavailable");
+        return;
+      }
+      const body = Buffer.from(await assetResp.arrayBuffer());
+      if (body.length < 4 || body.subarray(0, 2).toString() !== "PK") {
+        console.error("[StorageProxy] APK asset did not return a ZIP/APK binary");
+        res.status(502).send("APK asset was not a binary package");
+        return;
+      }
+      res.status(200);
+      res.set("Content-Type", "application/vnd.android.package-archive");
+      res.set("Content-Length", String(body.length));
+      res.set("Content-Disposition", 'attachment; filename="TanRyuGram-universal.apk"');
+      res.set("Cache-Control", "private, no-store");
+      res.set("X-Content-Type-Options", "nosniff");
+      res.send(body);
+    } catch (error) {
+      console.error("[StorageProxy] APK download failed:", error);
+      res.status(502).send("APK download failed");
+    }
   };
-  app.get("/api/download/tanryugram.apk", redirectToApk);
-  app.get("/api/download/tanryugram-v2.apk", redirectToApk);
+  app.get("/api/download/tanryugram.apk", (req, res) => void sendApk(req, res));
+  app.get("/api/download/tanryugram-v2.apk", (req, res) => void sendApk(req, res));
 }
