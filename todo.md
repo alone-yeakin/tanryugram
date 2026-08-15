@@ -336,3 +336,9 @@
 - [x] Rename “Worth following” to “People you may know”
 - [x] Add a consent-based location permission flow for nearby suggestions without exposing precise location publicly
 - [x] Validate mobile and desktop rendering, then save the repair checkpoint
+
+## Remaining hosted HMR client error
+
+- [x] Trace the remaining Vite client WebSocket injection in the hosted preview
+- [x] Disable the hosted HMR client injection while preserving normal development serving
+- [x] Validate browser console, tests, build, and save a repair checkpoint

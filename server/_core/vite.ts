@@ -17,6 +17,10 @@ export function getViteServerOptions() {
   };
 }
 
+export function stripHostedViteClient(page: string) {
+  return page.replace(/<script[^>]+src=["']\/?@vite\/client["'][^>]*><\/script>\s*/g, "");
+}
+
 export async function setupVite(app: Express, _server: Server) {
   const serverOptions = getViteServerOptions();
 
@@ -45,7 +49,8 @@ export async function setupVite(app: Express, _server: Server) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`
       );
-      const page = await vite.transformIndexHtml(url, template);
+      const transformedPage = await vite.transformIndexHtml(url, template);
+      const page = stripHostedViteClient(transformedPage);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
