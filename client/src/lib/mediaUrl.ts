@@ -35,22 +35,23 @@ export function normalizeMediaUrl(value?: string | null) {
   const raw = value.trim();
   if (!raw || raw === "null" || raw === "undefined" || raw === "[object Object]" || raw.startsWith("blob:") || raw.startsWith("file:")) return "";
   if (raw.startsWith("data:")) return raw;
-  if (!raw.includes("://") && !raw.startsWith("/")) return `/manus-storage/${raw.replace(/^manus-storage\//, "")}`;
+  if (!raw.includes("://") && !raw.startsWith("/")) return `/api/media-proxy/${raw.replace(/^manus-storage\//, "")}`;
 
   try {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://tanryugram.invalid";
     const parsed = new URL(raw, origin);
     if (parsed.pathname.includes("/manus-storage/")) {
-      return `${parsed.pathname}${parsed.search}`;
+      const key = parsed.pathname.split("/manus-storage/")[1] || "";
+      return `/api/media-proxy/${key}${parsed.search}`;
     }
     const legacyProxy = parsed.pathname.match(/\/api\/media-proxy\/(.+)$/);
     if (legacyProxy?.[1]) {
-      return `/manus-storage/${legacyProxy[1]}${parsed.search}`;
+      return `/api/media-proxy/${legacyProxy[1]}${parsed.search}`;
     }
     return parsed.href;
   } catch {
     const key = raw.replace(/^\/+/, "");
-    return key.startsWith("manus-storage/") ? `/${key}` : `/manus-storage/${key}`;
+    return key.startsWith("manus-storage/") ? `/api/media-proxy/${key.slice("manus-storage/".length)}` : `/api/media-proxy/${key}`;
   }
 }
 
