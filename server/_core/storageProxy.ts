@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { ENV } from "./env";
 
-const APK_KEY = "TanRyuGram-universal-debug_4d8817b3.apk";
+const APK_KEY = "TanRyuGram-universal-firebase-debug_70fa8937.apk";
 
 async function fetchStoredObject(key: string, res: Response, downloadName?: string) {
   if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {

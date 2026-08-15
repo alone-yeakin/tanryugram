@@ -372,3 +372,10 @@
 - [x] Build the final universal debug APK with Firebase client configuration and unchanged application code
 - [x] Verify APK signature, ABI coverage, Firebase resources, and package integrity
 - [x] Deliver the final APK and updated private source package location
+
+## Invalid APK and Get the app link regression
+
+- [x] Inspect the delivered APK with Android packaging tools and compare it with the live download response
+- [x] Produce a clean installable universal debug APK with correct archive and signing structure
+- [x] Point the Home Get the app button to the verified downloadable APK endpoint
+- [ ] Validate package metadata, signature, ABI coverage, download headers, and publish the repair
