@@ -399,4 +399,4 @@
 - [x] Inspect the new APK and target-device compatibility signals without reopening the user screenshot
 - [x] Distinguish signature conflict, existing-package state, ABI/API incompatibility, or installer-policy failure
 - [x] Apply the minimum correction or provide the exact safe install path
-- [ ] Validate the corrected artifact and publish any required download-link update
+- [x] Validate the corrected artifact and publish any required download-link update
