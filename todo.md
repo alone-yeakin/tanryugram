@@ -386,3 +386,16 @@
 - [x] Fix any remaining media permission or URL issue and add regression coverage
 - [x] Package full source, mobile Android project, and automated build instructions into one archive
 - [x] Validate the archive and save a delivery checkpoint
+
+## Feed loading and story interactions
+
+- [ ] Add an animated feed loading skeleton while posts are loading
+- [ ] Add story replies with authenticated sender and story-owner visibility
+- [ ] Add owner-only story deletion with backend permission enforcement
+- [ ] Validate responsive feed/story flows and save a checkpoint
+
+## Windows PowerShell Android build wrapper
+
+- [x] Add a PowerShell build script for the Android project
+- [x] Update README with the correct Windows/PowerShell command
+- [x] Repackage and validate the unified source archive
