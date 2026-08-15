@@ -405,3 +405,9 @@
 - [x] Ensure build-all.ps1 and build-all.bat are present at the archive root opened by Windows users
 - [x] Clarify PowerShell commands with the required .\ prefix and add an archive-root diagnostic
 - [x] Rebuild and validate the corrected ZIP package
+
+## Debug APK delivery
+
+- [x] Locate any existing TanRyuGram debug APK and Android build outputs
+- [x] Assemble a fresh debug APK if the environment supports the required Android SDK
+- [x] Validate the APK and attach it with the complete source package
