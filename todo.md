@@ -399,3 +399,9 @@
 - [x] Add a PowerShell build script for the Android project
 - [x] Update README with the correct Windows/PowerShell command
 - [x] Repackage and validate the unified source archive
+
+## Windows archive-root command repair
+
+- [x] Ensure build-all.ps1 and build-all.bat are present at the archive root opened by Windows users
+- [x] Clarify PowerShell commands with the required .\ prefix and add an archive-root diagnostic
+- [x] Rebuild and validate the corrected ZIP package
