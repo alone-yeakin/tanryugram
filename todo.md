@@ -322,3 +322,9 @@
 - [x] Add a native Android incoming-call ringtone and vibration behavior
 - [x] Configure a high-priority call notification channel and call sound
 - [x] Rebuild and validate the Android Studio ZIP package
+
+## Vite HMR WebSocket repair
+
+- [x] Diagnose the hosted preview Vite HMR WebSocket connection failure
+- [x] Apply a compatible Vite HMR configuration and restart the development server
+- [x] Validate the preview and save the repair checkpoint

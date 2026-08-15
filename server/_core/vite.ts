@@ -6,12 +6,19 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import viteConfig from "../../vite.config";
 
-export async function setupVite(app: Express, server: Server) {
-  const serverOptions = {
-    middlewareMode: true,
-    hmr: { server },
+export function getViteServerOptions() {
+  return {
+    middlewareMode: true as const,
+    // The hosted preview terminates HTTP at a public proxy while Vite’s
+    // internal middleware socket remains on localhost:5173. Disable the
+    // unreachable HMR socket to prevent noisy client WebSocket failures.
+    hmr: false as const,
     allowedHosts: true as const,
   };
+}
+
+export async function setupVite(app: Express, _server: Server) {
+  const serverOptions = getViteServerOptions();
 
   const vite = await createViteServer({
     ...viteConfig,
