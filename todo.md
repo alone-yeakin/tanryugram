@@ -367,3 +367,15 @@
 - [x] Inspect the current preview HTML and server process for any remaining Vite client path
 - [x] Apply or confirm the final no-HMR preview configuration
 - [x] Validate the current browser session, tests, build, and save a repair checkpoint
+
+## Visual-design preservation audit
+
+- [x] Compare the current Home and Creator Studio layout against the previous stable visual state
+- [x] Restore only unintended visual or routing changes without removing requested media, owner, location, or call fixes
+- [x] Validate both surfaces and save a corrective checkpoint
+
+## Live owner Creator Studio mismatch
+
+- [x] Verify the deployed owner session and Creator Studio route for realaayan.apple@gmail.com
+- [x] Repair owner routing or data-state mismatch without replacing the original design
+- [x] Validate owner and non-owner behavior, then save a checkpoint
