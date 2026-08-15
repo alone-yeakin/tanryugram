@@ -400,3 +400,16 @@
 - [x] Distinguish signature conflict, existing-package state, ABI/API incompatibility, or installer-policy failure
 - [x] Apply the minimum correction or provide the exact safe install path
 - [x] Validate the corrected artifact and publish any required download-link update
+
+## Persistent Android “App not installed” diagnosis
+
+- [x] Collect the phone model, Android version, and installer error details needed to distinguish package conflict from device incompatibility
+- [x] Compare the target device requirements with the current APK and existing package/signature state
+- [x] Apply only the evidence-based compatibility or package-state correction
+- [x] Validate and deliver the final installation path or compatible APK
+
+- [x] Use confirmed Redmi Note 14 Pro model 24116RACCG, Android 14, and HyperOS 1.0.7.0.UOFMIXM in the installer diagnosis
+
+- [x] Treat the clean Apps list as evidence against update conflict and test a HyperOS-compatible package/install route
+
+- [x] Test and publish the clean Gradle-generated ARM32 APK as a Redmi-compatible fallback without manual universal repackaging

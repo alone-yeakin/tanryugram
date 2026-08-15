@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { ENV } from "./env";
 
-const APK_KEY = "TanRyuGram-universal-firebase-16k_a1b0f3bf.apk";
+const APK_KEY = "app-debug_d22d4d93.apk";
 
 async function fetchStoredObject(key: string, res: Response, downloadName?: string) {
   if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
@@ -115,7 +115,7 @@ export function registerStorageProxy(app: Express) {
       res.status(200);
       res.set("Content-Type", "application/vnd.android.package-archive");
       res.set("Content-Length", String(body.length));
-      res.set("Content-Disposition", 'attachment; filename="TanRyuGram-universal.apk"');
+      res.set("Content-Disposition", 'attachment; filename="TanRyuGram-redmi-arm32-firebase.apk"');
       res.set("Cache-Control", "private, no-store");
       res.set("X-Content-Type-Options", "nosniff");
       res.send(body);
