@@ -361,3 +361,9 @@
 - [x] Restore owner-only Creator Studio visibility using the authenticated owner identity
 - [x] Replace the fragile preview HMR behavior with a stable no-WebSocket setup
 - [x] Validate owner access, preview HTML, tests, and build, then save a checkpoint
+
+## Latest live HMR WebSocket report
+
+- [x] Inspect the current preview HTML and server process for any remaining Vite client path
+- [x] Apply or confirm the final no-HMR preview configuration
+- [x] Validate the current browser session, tests, build, and save a repair checkpoint
