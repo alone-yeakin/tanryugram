@@ -15,6 +15,7 @@ describe("Tanryugram badge and follower-display controls", () => {
 
   it("exposes Creator Studio visibility from the server-derived owner flag", () => {
     expect(sanitizeAuthUser({ openId: ENV.ownerOpenId, role: "user", passwordHash: "hidden" })).toMatchObject({ isOwner: Boolean(ENV.ownerOpenId) });
+    expect(sanitizeAuthUser({ openId: "native-owner-session", email: "realaayan.apple@gmail.com", role: "admin" })).toMatchObject({ isOwner: true });
     expect(sanitizeAuthUser({ openId: "ordinary-open-id", role: "admin" })).toMatchObject({ isOwner: false });
   });
 

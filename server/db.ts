@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import { eq, and, or, like, desc, sql, inArray } from "drizzle-orm";
-import { ENV } from "./_core/env";
+import { isTanryugramOwner } from "./authorization";
 import { resolveDisplayedFollowerCount } from "./followerStats";
 import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
 
@@ -19,7 +19,7 @@ export async function upsertUser(user: InsertUser) {
   for (const field of ["name", "email", "loginMethod", "username", "avatarUrl", "bio"] as const) {
     if (user[field] !== undefined) { values[field] = user[field] as never; updateSet[field] = user[field] ?? null; }
   }
-  if (user.openId === ENV.ownerOpenId) { values.role = "admin"; updateSet.role = "admin"; } else if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
+  if (isTanryugramOwner(user)) { values.role = "admin"; updateSet.role = "admin"; } else if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 

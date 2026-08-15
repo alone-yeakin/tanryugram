@@ -10,11 +10,51 @@ import {
   Text,
   View,
 } from "react-native";
+import * as Device from "expo-device";
+import * as Notifications from "expo-notifications";
 import { WebView } from "react-native-webview";
 import type { WebViewErrorEvent, WebViewHttpErrorEvent, WebViewNavigation } from "react-native-webview/lib/WebViewTypes";
 
 const APP_URL = "https://tanryugram-njs4tc3o.manus.space";
 const APP_HOST = new URL(APP_URL).host;
+type RingtoneId = "default" | "soft" | "bright";
+let selectedRingtone: RingtoneId = "default";
+const ringtoneSound = (value: RingtoneId) => value === "soft" ? "soft_ringtone.wav" : value === "bright" ? "bright_ringtone.wav" : "default";
+const ringtoneChannel = (value: RingtoneId) => `calls_${value}`;
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+async function registerForPushNotificationsAsync() {
+  if (!Device.isDevice) return null;
+  const existing = await Notifications.getPermissionsAsync();
+  let status = existing.status;
+  if (status !== "granted") {
+    const requested = await Notifications.requestPermissionsAsync();
+    status = requested.status;
+  }
+  if (status !== "granted") return null;
+  if (Device.osName === "Android") {
+    for (const ringtone of ["default", "soft", "bright"] as RingtoneId[]) {
+      await Notifications.setNotificationChannelAsync(ringtoneChannel(ringtone), {
+        name: `TanRyuGram ${ringtone === "default" ? "system" : ringtone} calls`,
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 300, 200, 300, 200, 300],
+        sound: ringtoneSound(ringtone),
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      });
+    }
+  }
+  const token = await Notifications.getDevicePushTokenAsync();
+  return token.data;
+}
 
 function LoadingView() {
   return (
@@ -47,6 +87,30 @@ export default function App() {
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("Please check your internet connection and try again.");
   const [reloadKey, setReloadKey] = useState(0);
+  const nativePushToken = useRef<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const registration = registerForPushNotificationsAsync()
+      .then((token) => {
+        if (!mounted || !token) return;
+        nativePushToken.current = token;
+        webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-push-token',{detail:{token:${JSON.stringify(token)}}})); true;`);
+      })
+      .catch(() => undefined);
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as { callId?: number; route?: string };
+      if (data?.route === "call" || data?.callId) {
+        const payload = JSON.stringify(data);
+        webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-call-open',{detail:${payload}})); true;`);
+      }
+    });
+    return () => {
+      mounted = false;
+      void registration;
+      responseSubscription.remove();
+    };
+  }, []);
 
   const retry = useCallback(() => {
     setHasError(false);
@@ -82,11 +146,41 @@ export default function App() {
     }
   };
 
+  const injectNativePushToken = useCallback(() => {
+    const token = nativePushToken.current;
+    if (!token) return;
+    webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-push-token',{detail:{token:${JSON.stringify(token)}}})); true;`);
+  }, []);
+
+  const handleWebMessage = useCallback((event: { nativeEvent: { data: string } }) => {
+    try {
+      const message = JSON.parse(event.nativeEvent.data) as { type?: string; callId?: number; callType?: "audio" | "video"; callerName?: string; ringtone?: RingtoneId };
+      if (message.type === "set-ringtone" && message.ringtone && ["default", "soft", "bright"].includes(message.ringtone)) {
+        selectedRingtone = message.ringtone;
+        return;
+      }
+      if (message.type !== "incoming-call" || !message.callId) return;
+      void Notifications.scheduleNotificationAsync({
+        content: {
+          title: `Incoming ${message.callType || "audio"} call`,
+          body: `${message.callerName || "A TanRyuGram member"} is calling you on TanRyuGram`,
+          sound: ringtoneSound(selectedRingtone),
+          data: { route: "call", callId: message.callId, callType: message.callType || "audio", callerName: message.callerName || "A TanRyuGram member" },
+          ...(Device.osName === "Android" ? { channelId: ringtoneChannel(selectedRingtone) } : {}),
+        } as any,
+        trigger: null,
+      });
+    } catch {
+      // Ignore ordinary WebView messages and malformed page messages.
+    }
+  }, []);
+
   const handleExternalLink = (request: { url: string }) => {
     try {
       const parsed = new URL(request.url);
       if (parsed.protocol !== "https:") return false;
-      if (parsed.host === APP_HOST || parsed.pathname.startsWith("/manus-storage/")) return true;
+      const isSignedMediaHost = parsed.hostname.endsWith(".cloudfront.net") || parsed.hostname.endsWith(".amazonaws.com");
+      if (parsed.host === APP_HOST || parsed.pathname.startsWith("/manus-storage/") || isSignedMediaHost) return true;
       Linking.openURL(request.url).catch(() => undefined);
       return false;
     } catch {
@@ -126,6 +220,8 @@ export default function App() {
           startInLoadingState
           renderLoading={() => <LoadingView />}
           onNavigationStateChange={handleNavigation}
+          onLoadEnd={injectNativePushToken}
+          onMessage={handleWebMessage}
           onShouldStartLoadWithRequest={handleExternalLink}
           onError={handleError}
           onHttpError={handleHttpError}
@@ -220,4 +316,3 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
 });
-

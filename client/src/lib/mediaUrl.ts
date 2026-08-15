@@ -33,7 +33,7 @@ export function initialsAvatar(name?: string | null) {
 export function normalizeMediaUrl(value?: string | null) {
   if (!value) return "";
   const raw = value.trim();
-  if (!raw || raw.startsWith("blob:")) return "";
+  if (!raw || raw === "null" || raw === "undefined" || raw === "[object Object]" || raw.startsWith("blob:") || raw.startsWith("file:")) return "";
   if (raw.startsWith("data:")) return raw;
   if (!raw.includes("://") && !raw.startsWith("/")) return `/manus-storage/${raw.replace(/^manus-storage\//, "")}`;
 

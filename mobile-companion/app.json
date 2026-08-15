@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tanryugram",
     "slug": "tanryugram",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -17,13 +17,14 @@
       },
       "predictiveBackGestureEnabled": true,
       "package": "com.tanryugram",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": ["CAMERA", "RECORD_AUDIO", "ACCESS_FINE_LOCATION", "POST_NOTIFICATIONS"]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
+    "plugins": ["expo-notifications"],
     "scheme": "tanryugram",
     "extra": {
       "productionUrl": "https://3000-il5x7uohusawk3rcy6ksz-57959f74.sg1.manus.computer"

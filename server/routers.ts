@@ -21,7 +21,7 @@ const stripe = () => {
   return new Stripe(key, { apiVersion: "2025-02-24.acacia" as any });
 };
 const ownerOnly = protectedProcedure.use(({ ctx, next }) => {
-  if (!isTanryugramOwner(ctx.user.openId)) throw new TRPCError({ code: "FORBIDDEN", message: "Owner access required" });
+  if (!isTanryugramOwner(ctx.user)) throw new TRPCError({ code: "FORBIDDEN", message: "Owner access required" });
   return next({ ctx });
 });
 const GROUP_ATTACHMENT_MAX_BYTES = 12 * 1024 * 1024;
@@ -54,7 +54,7 @@ function classifyGroupAttachment(contentType: string) {
 export const sanitizeAuthUser = (user: any) => {
   if (!user) return user;
   const { passwordHash: _passwordHash, ...safeUser } = user;
-  return { ...safeUser, isOwner: user.openId === ENV.ownerOpenId };
+  return { ...safeUser, isOwner: isTanryugramOwner(user) };
 };
 
 export const hasNativePassword = (user: any) => Boolean(user?.passwordHash);
@@ -119,7 +119,7 @@ export const appRouter = router({
       const insertedPk = Number(insertedId.insertId || 0);
       const newUser = (await database.select().from(users).where(eq(users.id, insertedPk)).limit(1))[0] || (await database.select().from(users).where(eq(users.openId, openId)).limit(1))[0];
       
-      if (newUser.openId === ENV.ownerOpenId && (newUser.role !== "admin" || !newUser.isVerified)) {
+      if (isTanryugramOwner(newUser) && (newUser.role !== "admin" || !newUser.isVerified)) {
         await database.update(users).set({ role: "admin", isVerified: true }).where(eq(users.id, newUser.id));
       }
       const token = await sdk.createSessionToken(newUser.openId, { expiresInMs: 30 * 24 * 60 * 60 * 1000, name: newUser.name || newUser.email || "Tanryugram user" });
@@ -141,7 +141,7 @@ export const appRouter = router({
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Incorrect password" });
       }
       
-      if (found.openId === ENV.ownerOpenId && (found.role !== "admin" || !found.isVerified)) {
+      if (isTanryugramOwner(found) && (found.role !== "admin" || !found.isVerified)) {
         await database.update(users).set({ role: "admin", isVerified: true }).where(eq(users.id, found.id));
       }
       const token = await sdk.createSessionToken(found.openId, { expiresInMs: 30 * 24 * 60 * 60 * 1000, name: found.name || found.email || "Tanryugram user" });

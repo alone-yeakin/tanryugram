@@ -10,6 +10,9 @@ describe("portable Tanryugram media URLs", () => {
   it("repairs legacy storage keys and rejects device-local blob URLs", () => {
     expect(normalizeMediaUrl("users/7/avatar.webp")).toBe("/manus-storage/users/7/avatar.webp");
     expect(normalizeMediaUrl("blob:https://phone.invalid/local-only")).toBe("");
+    expect(normalizeMediaUrl("undefined")).toBe("");
+    expect(normalizeMediaUrl("null")).toBe("");
+    expect(normalizeMediaUrl("[object Object]")).toBe("");
   });
 
   it("rewrites legacy API proxy URLs to the active storage proxy", () => {

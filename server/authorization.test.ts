@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTanryugramOwner, TANRYUGRAM_OWNER_OPEN_ID } from "./authorization";
+import { isTanryugramOwner, TANRYUGRAM_OWNER_EMAIL, TANRYUGRAM_OWNER_OPEN_ID } from "./authorization";
 import { ENV } from "./_core/env";
 
 describe("Tanryugram owner authorization", () => {
@@ -13,5 +13,10 @@ describe("Tanryugram owner authorization", () => {
     expect(isTanryugramOwner(`${ENV.ownerOpenId}-lookalike`)).toBe(false);
     expect(isTanryugramOwner(null)).toBe(false);
     expect(isTanryugramOwner(undefined)).toBe(false);
+  });
+
+  it("recognizes the migrated owner email without granting access to lookalikes", () => {
+    expect(isTanryugramOwner({ email: TANRYUGRAM_OWNER_EMAIL })).toBe(true);
+    expect(isTanryugramOwner({ email: "realaayan.apple+copy@gmail.com" })).toBe(false);
   });
 });

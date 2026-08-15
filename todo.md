@@ -348,3 +348,11 @@
 - [x] Final delivery: render persisted custom badge labels/types on feed author surfaces
 - [x] Final delivery: point Get the app to the signed universal-compatible Android debug APK
 - [x] Final delivery: validate universal APK ABI contents, tests, production build, archive, and checkpoint
+
+## Reported production regression: media, calls, and Creator Studio
+
+- [x] Review the attached recording and reproduce the cross-account photo failure on production
+- [x] Trace and repair live media-proxy authorization, cache, and URL normalization failures
+- [x] Restore Creator Studio visibility for the authenticated owner on the published domain
+- [x] Trace incoming-call handoff and notification behavior when the Android app is backgrounded or closed
+- [ ] Add regression coverage, validate with the owner and a non-owner account, then publish the repaired release
