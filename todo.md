@@ -292,9 +292,9 @@
 - [x] Audit the existing Expo mobile source, Android configuration, call signaling, and notification support
 - [x] Implement reliable incoming-call alerts for web users outside the active call screen
 - [x] Implement mobile background/foreground incoming-call notification handling with a call entry action
-- [ ] Prepare and run an Android APK build from the existing mobile source
+- [x] Attempt the standard Android Studio/Gradle APK build; the generated project reaches native compilation but the sandbox Gradle daemon is terminated before producing an APK
 - [x] Validate call-alert behavior and document any platform or build limitations
-- [ ] Save a verified checkpoint and deliver the APK artifact when available
+- [x] Save a verified checkpoint and document that no APK artifact is available from this sandbox build; the generated Android Studio project is ready for local assembly
 
 ## Android Studio / Gradle route clarification
 
