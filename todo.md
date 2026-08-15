@@ -385,4 +385,4 @@
 - [x] Reproduce the live download chain that exposes signed-storage URL text to Android
 - [x] Replace redirect/text delivery with a binary-safe APK response
 - [x] Validate live content type, bytes, APK integrity, and installation metadata
-- [ ] Publish the corrected Get the app download and deliver the verified APK
+- [x] Publish the corrected Get the app download and deliver the verified APK
