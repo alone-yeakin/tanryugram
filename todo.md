@@ -420,10 +420,10 @@
 
 ## Android call reliability repair
 
-- [ ] Fix native call audio startup failure shown in the debug APK
-- [ ] Handle WebView microphone/camera permission requests for calls
-- [ ] Remove or simplify the startup splash activity if it blocks the call app flow
-- [ ] Ensure incoming calls surface through the home-screen/native notification path
+- [x] Fix native call audio startup failure shown in the debug APK
+- [x] Handle WebView microphone/camera permission requests for calls
+- [x] Remove or simplify the startup splash activity if it blocks the call app flow
+- [x] Ensure incoming calls surface through the home-screen/native notification path
 - [x] Build and validate a new APK and refreshed source package
 
 ## Call acceptance and audio reliability follow-up
@@ -432,3 +432,8 @@
 - [x] Synchronize pending-call polling with accepted call state across Home and Messages
 - [x] Make remote WebRTC audio playback and speaker routing reliable after connection
 - [x] Add regression coverage and rebuild the APK/source package
+
+## Autonomous call reliability continuation
+
+- [x] Continue without Firebase Android client credentials by strengthening foreground/Home call delivery and local recovery
+- [x] Validate the final autonomous APK and source package, documenting the background-push limitation if it remains

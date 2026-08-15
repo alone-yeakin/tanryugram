@@ -110,6 +110,8 @@ export default function Home() {
     const callId = Number(pendingCall?.call?.id || 0);
     if (!callId || announcedCallId.current === callId) return;
     announcedCallId.current = callId;
+    const nativeMessage = { type: "incoming-call", callId, callType: pendingCall.call.callType, callerName: pendingCall.caller?.name || "A TanRyuGram member" };
+    (window as Window & { ReactNativeWebView?: { postMessage: (message: string) => void } }).ReactNativeWebView?.postMessage(JSON.stringify(nativeMessage));
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
       new Notification(`Incoming ${pendingCall.call.callType} call`, { body: `${pendingCall.caller?.name || "A TanRyuGram member"} is calling you` });
     }
