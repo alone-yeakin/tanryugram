@@ -51,7 +51,12 @@ export async function setupVite(app: Express, _server: Server) {
       );
       const transformedPage = await vite.transformIndexHtml(url, template);
       const page = stripHostedViteClient(transformedPage);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      res.status(200).set({
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);

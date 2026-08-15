@@ -348,3 +348,9 @@
 - [x] Verify whether the reported WebSocket error is from a stale cached preview or current served HTML
 - [x] Refresh the preview path if needed and confirm no Vite client is loaded
 - [x] Validate and save the repair checkpoint
+
+## Repeated HMR report verification
+
+- [x] Inspect current public and preview HTML for any Vite client reference
+- [x] Refresh the preview process and verify the current browser session loads the new HTML
+- [x] Validate and save the final HMR verification checkpoint
