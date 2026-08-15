@@ -437,3 +437,9 @@
 
 - [x] Continue without Firebase Android client credentials by strengthening foreground/Home call delivery and local recovery
 - [x] Validate the final autonomous APK and source package, documenting the background-push limitation if it remains
+
+## Background call delivery continuation
+
+- [x] Add Android battery-optimization exemption guidance and an in-app recovery prompt
+- [x] Improve local call notification behavior when the app is backgrounded or returns to foreground
+- [x] Rebuild and validate the updated APK/source package with the Android limitation documented

@@ -135,11 +135,14 @@ export default function Home() {
       if (callId) setDismissedCallId(callId);
       void incomingCallsQuery.refetch();
     };
+    const handleNativeAppActive = () => { void incomingCallsQuery.refetch(); };
     window.addEventListener("tanryugram-native-call-open", handleNativeCallOpen);
     window.addEventListener("tanryugram-call-state-changed", handleCallStateChanged);
+    window.addEventListener("tanryugram-native-app-active", handleNativeAppActive);
     return () => {
       window.removeEventListener("tanryugram-native-call-open", handleNativeCallOpen);
       window.removeEventListener("tanryugram-call-state-changed", handleCallStateChanged);
+      window.removeEventListener("tanryugram-native-app-active", handleNativeAppActive);
     };
   }, [incomingCallsQuery]);
   // Payment mutations removed for beta stability
