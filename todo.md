@@ -355,4 +355,4 @@
 - [x] Trace and repair live media-proxy authorization, cache, and URL normalization failures
 - [x] Restore Creator Studio visibility for the authenticated owner on the published domain
 - [x] Trace incoming-call handoff and notification behavior when the Android app is backgrounded or closed
-- [ ] Add regression coverage, validate with the owner and a non-owner account, then publish the repaired release
+- [x] Add regression coverage, validate owner/non-owner authorization and public media access, then publish the repaired release
