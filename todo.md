@@ -393,3 +393,10 @@
 - [x] Build a clean device-compatible APK without manually mixing stale ABI libraries
 - [x] Validate installer metadata, signature, archive integrity, and live downloaded bytes
 - [x] Publish the corrected device-compatible APK and update the Get the app route
+
+## Android generic installation failure after installable APK repair
+
+- [x] Inspect the new APK and target-device compatibility signals without reopening the user screenshot
+- [x] Distinguish signature conflict, existing-package state, ABI/API incompatibility, or installer-policy failure
+- [x] Apply the minimum correction or provide the exact safe install path
+- [ ] Validate the corrected artifact and publish any required download-link update
