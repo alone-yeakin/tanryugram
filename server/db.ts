@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import { eq, and, or, like, desc, sql, inArray } from "drizzle-orm";
-import { isTanryugramOwner } from "./authorization";
+import { canDeletePost, isTanryugramOwner } from "./authorization";
 import { resolveDisplayedFollowerCount } from "./followerStats";
 import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
 
@@ -176,6 +176,7 @@ export async function setUserRole(userId: number, role: "user" | "admin") { cons
 export async function getAllUsers() { const db = await getDb(); if (!db) return []; return db.select().from(users).orderBy(desc(users.createdAt)).limit(100); }
 export async function getAllPosts() { const db = await getDb(); if (!db) return []; return db.select({ post: posts, creator: users }).from(posts).innerJoin(users, eq(posts.userId, users.id)).orderBy(desc(posts.createdAt)).limit(100); }
 export async function deletePost(postId: number) { const db = await getDb(); if (!db) return; await db.delete(posts).where(eq(posts.id, postId)); }
+export async function deletePostAsUser(postId: number, userId: number, isAdmin: boolean) { const db = await getDb(); if (!db) return { deleted: false, reason: "database_unavailable" as const }; const post = (await db.select({ userId: posts.userId }).from(posts).where(eq(posts.id, postId)).limit(1))[0]; if (!post) return { deleted: false, reason: "not_found" as const }; if (!canDeletePost(userId, post.userId, isAdmin ? "admin" : "user")) return { deleted: false, reason: "forbidden" as const }; await db.delete(posts).where(eq(posts.id, postId)); return { deleted: true, reason: "deleted" as const }; }
 export async function addStory(userId: number, mediaUrl: string, mediaType: "image" | "video") { const db = await getDb(); if (!db) return undefined; return (await db.insert(stories).values({ userId, mediaUrl, mediaType, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }))[0]?.insertId; }
 export async function getActiveStories() { const db = await getDb(); if (!db) return []; return db.select({ story: stories, owner: publicCreatorFields }).from(stories).leftJoin(users, eq(stories.userId, users.id)).where(sql`${stories.expiresAt} > NOW()`).orderBy(desc(stories.createdAt)).limit(100); }
 export async function recordStoryView(storyId: number, viewerId: number) { const db = await getDb(); if (!db) return; const exists = await db.select().from(storyViews).where(and(eq(storyViews.storyId, storyId), eq(storyViews.viewerId, viewerId))).limit(1); if (exists.length === 0) await db.insert(storyViews).values({ storyId, viewerId }); }

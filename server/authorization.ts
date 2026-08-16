@@ -10,3 +10,7 @@ export function isTanryugramOwner(identity?: string | null | { openId?: string |
   const matchesOwnerEmail = String(email || "").trim().toLowerCase() === TANRYUGRAM_OWNER_EMAIL;
   return matchesOpenId || matchesOwnerEmail;
 }
+
+export function canDeletePost(userId: number, postOwnerId: number, role?: string | null) {
+  return userId === postOwnerId || String(role || "").toLowerCase() === "admin";
+}

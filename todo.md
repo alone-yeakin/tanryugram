@@ -413,3 +413,10 @@
 - [x] Treat the clean Apps list as evidence against update conflict and test a HyperOS-compatible package/install route
 
 - [x] Test and publish the clean Gradle-generated ARM32 APK as a Redmi-compatible fallback without manual universal repackaging
+
+## User post deletion permission fix
+
+- [x] Allow authenticated users to delete their own posts while retaining admin deletion authority
+- [x] Add regression coverage for owner self-delete and non-owner denial
+- [x] Rebuild and verify the fixed debug APK
+- [x] Publish the permission fix and deliver the APK artifact
