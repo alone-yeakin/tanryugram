@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   BackHandler,
   Linking,
+  Platform,
   Pressable,
   SafeAreaView,
   StatusBar,
@@ -18,6 +19,7 @@ import type { WebViewErrorEvent, WebViewHttpErrorEvent, WebViewNavigation } from
 const APP_URL = "https://tanryugram-njs4tc3o.manus.space";
 const APP_HOST = new URL(APP_URL).host;
 type RingtoneId = "default" | "soft" | "bright";
+type IncomingCall = { callId: number; callType: "audio" | "video"; callerName: string };
 let selectedRingtone: RingtoneId = "default";
 const ringtoneSound = (value: RingtoneId) => value === "soft" ? "soft_ringtone.wav" : value === "bright" ? "bright_ringtone.wav" : "default";
 const ringtoneChannel = (value: RingtoneId) => `calls_${value}`;
@@ -87,6 +89,8 @@ export default function App() {
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("Please check your internet connection and try again.");
   const [reloadKey, setReloadKey] = useState(0);
+  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+  const [sessionStatus, setSessionStatus] = useState("Connecting secure session…");
   const nativePushToken = useRef<string | null>(null);
 
   useEffect(() => {
@@ -100,6 +104,14 @@ export default function App() {
       .catch(() => undefined);
     const dispatchNativeCall = (data: Record<string, unknown>) => {
       if (data?.route !== "call" && data?.event !== "incoming_call" && !data?.callId) return;
+      const callId = Number(data.callId);
+      if (Number.isFinite(callId) && callId > 0) {
+        setIncomingCall({
+          callId,
+          callType: data.callType === "video" ? "video" : "audio",
+          callerName: String(data.callerName || "A TanRyuGram member"),
+        });
+      }
       const payload = JSON.stringify(data);
       webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-call-open',{detail:${payload}})); true;`);
     };
@@ -136,7 +148,10 @@ export default function App() {
 
   const handleNavigation = (navigation: WebViewNavigation) => {
     setCanGoBack(navigation.canGoBack);
-    if (navigation.loading) setHasError(false);
+    if (navigation.loading) {
+      setHasError(false);
+      setSessionStatus("Connecting secure session…");
+    }
   };
 
   const handleError = (event: WebViewErrorEvent) => {
@@ -151,7 +166,23 @@ export default function App() {
     }
   };
 
+  const openIncomingCall = useCallback(() => {
+    if (!incomingCall) return;
+    const payload = JSON.stringify({ event: "incoming_call", route: "call", ...incomingCall });
+    webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-call-open',{detail:${payload}})); true;`);
+    setIncomingCall(null);
+  }, [incomingCall]);
+
+  const dismissIncomingCall = useCallback(() => {
+    if (!incomingCall) return;
+    const payload = JSON.stringify({ event: "incoming_call_response", route: "call", callId: incomingCall.callId, status: "declined" });
+    webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-call-response',{detail:${payload}})); true;`);
+    webViewRef.current?.postMessage(JSON.stringify({ type: "decline-incoming-call", ...incomingCall }));
+    setIncomingCall(null);
+  }, [incomingCall]);
+
   const injectNativePushToken = useCallback(() => {
+    setSessionStatus("Secure session ready");
     const token = nativePushToken.current;
     if (!token) return;
     webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-push-token',{detail:{token:${JSON.stringify(token)}}})); true;`);
@@ -159,7 +190,11 @@ export default function App() {
 
   const handleWebMessage = useCallback((event: { nativeEvent: { data: string } }) => {
     try {
-      const message = JSON.parse(event.nativeEvent.data) as { type?: string; callId?: number; callType?: "audio" | "video"; callerName?: string; ringtone?: RingtoneId };
+      const message = JSON.parse(event.nativeEvent.data) as { type?: string; callId?: number; callType?: "audio" | "video"; callerName?: string; ringtone?: RingtoneId; authenticated?: boolean; loading?: boolean; sessionExpired?: boolean; userName?: string | null };
+      if (message.type === "auth-state") {
+        setSessionStatus(message.loading ? "Checking account…" : message.sessionExpired ? "Session expired · sign in again" : message.authenticated ? `Signed in${message.userName ? ` as ${message.userName}` : ""}` : "Sign in required");
+        return;
+      }
       if (message.type === "set-ringtone" && message.ringtone && ["default", "soft", "bright"].includes(message.ringtone)) {
         selectedRingtone = message.ringtone;
         return;
@@ -199,6 +234,8 @@ export default function App() {
       {hasError ? (
         <ErrorView message={errorMessage} onRetry={retry} />
       ) : (
+        <View style={styles.webviewShell}>
+        <View style={styles.sessionBar}><View style={styles.sessionDot} /><Text style={styles.sessionLabel}>Tanryugram mobile</Text><Text style={styles.sessionStatus}>{sessionStatus}</Text></View>
         <WebView
           key={reloadKey}
           ref={webViewRef}
@@ -238,8 +275,23 @@ export default function App() {
           showsVerticalScrollIndicator={false}
           bounces={false}
           automaticallyAdjustContentInsets={false}
-          applicationNameForUserAgent="Tanryugram/1.0"
+          applicationNameForUserAgent="Tanryugram/1.1"
         />
+        {incomingCall ? (
+          <View style={styles.incomingCallCard} accessibilityViewIsModal>
+            <View style={styles.incomingCallGlow} />
+            <Text style={styles.incomingEyebrow}>Tanryugram · incoming {incomingCall.callType} call</Text>
+            <View style={styles.incomingAvatar}><Text style={styles.incomingAvatarText}>{incomingCall.callerName.slice(0, 1).toUpperCase()}</Text></View>
+            <Text style={styles.incomingName}>{incomingCall.callerName}</Text>
+            <Text style={styles.incomingHint}>Answer from the secure call room</Text>
+            <View style={styles.incomingActions}>
+              <Pressable onPress={dismissIncomingCall} style={({ pressed }) => [styles.declineButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel="Decline call"><Text style={styles.declineLabel}>Decline</Text></Pressable>
+              <Pressable onPress={openIncomingCall} style={({ pressed }) => [styles.answerButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel="Answer call"><Text style={styles.answerLabel}>Answer</Text></Pressable>
+            </View>
+            {Platform.OS === "android" ? <Text style={styles.lockScreenHint}>Push alerts are enabled for background and lock-screen delivery.</Text> : null}
+          </View>
+        ) : null}
+        </View>
       )}
     </SafeAreaView>
   );
@@ -250,10 +302,69 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f8f7fb",
   },
+  webviewShell: {
+    flex: 1,
+    position: "relative",
+  },
   webview: {
     flex: 1,
     backgroundColor: "#f8f7fb",
   },
+  sessionBar: { height: 28, flexDirection: "row", alignItems: "center", paddingHorizontal: 13, backgroundColor: "#f8f7fb", gap: 6 },
+  sessionDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#22c55e" },
+  sessionLabel: { color: "#27222f", fontSize: 10, fontWeight: "800" },
+  sessionStatus: { marginLeft: "auto", color: "#817a8f", fontSize: 9 },
+  incomingCallCard: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    top: 18,
+    borderRadius: 28,
+    backgroundColor: "#16131f",
+    padding: 22,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.28,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
+  },
+  incomingCallGlow: {
+    position: "absolute",
+    top: -34,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: "#7c3aed",
+    opacity: 0.18,
+  },
+  incomingEyebrow: {
+    color: "#c4b5fd",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.3,
+    textTransform: "uppercase",
+  },
+  incomingAvatar: {
+    width: 72,
+    height: 72,
+    marginTop: 16,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8b5cf6",
+    borderWidth: 3,
+    borderColor: "#c4b5fd",
+  },
+  incomingAvatarText: { color: "#fff", fontSize: 28, fontWeight: "800" },
+  incomingName: { marginTop: 12, color: "#fff", fontSize: 20, fontWeight: "800" },
+  incomingHint: { marginTop: 5, color: "#aaa3b8", fontSize: 12 },
+  incomingActions: { width: "100%", flexDirection: "row", gap: 10, marginTop: 20 },
+  declineButton: { flex: 1, alignItems: "center", borderRadius: 15, backgroundColor: "#312331", paddingVertical: 13 },
+  answerButton: { flex: 1, alignItems: "center", borderRadius: 15, backgroundColor: "#22c55e", paddingVertical: 13 },
+  declineLabel: { color: "#fda4af", fontSize: 13, fontWeight: "800" },
+  answerLabel: { color: "#052e16", fontSize: 13, fontWeight: "800" },
+  lockScreenHint: { marginTop: 14, color: "#817a8f", fontSize: 10, textAlign: "center" },
   centered: {
     flex: 1,
     alignItems: "center",

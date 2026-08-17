@@ -68,6 +68,7 @@ export function useAuth(options?: UseAuthOptions) {
       loading: (!authTimedOut && meQuery.isLoading) || logoutMutation.isPending,
       error: meQuery.error ?? logoutMutation.error ?? null,
       isAuthenticated: Boolean(meQuery.data),
+      sessionExpired: authTimedOut || (meQuery.error instanceof TRPCClientError && meQuery.error.data?.code === "UNAUTHORIZED"),
     };
   }, [
     meQuery.data,

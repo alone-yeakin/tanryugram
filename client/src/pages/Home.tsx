@@ -74,7 +74,7 @@ function PostCard({ post, liked, saved, onLike, onSave, onComment, onOpenComment
 }
 
 export default function Home() {
-  const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
+  const { user, isAuthenticated, loading: authLoading, sessionExpired, logout } = useAuth();
   const openNativeLogin = () => toast.info("Sign in with your TanRyuGram email and password.");
   const { theme, toggleTheme } = useTheme();
   const [view, setView] = useState<View>("home");
@@ -134,6 +134,10 @@ export default function Home() {
     return () => { window.removeEventListener("focus", refreshCalls); document.removeEventListener("visibilitychange", refreshCalls); };
   }, [incomingCallsQuery]);
   useEffect(() => {
+    const nativeBridge = (window as Window & { ReactNativeWebView?: { postMessage: (message: string) => void } }).ReactNativeWebView;
+    nativeBridge?.postMessage(JSON.stringify({ type: "auth-state", authenticated: isAuthenticated, loading: authLoading, sessionExpired, userName: user?.name || null }));
+  }, [isAuthenticated, authLoading, sessionExpired, user?.name]);
+  useEffect(() => {
     const handleNativePushToken = (event: Event) => {
       const token = (event as CustomEvent<{ token?: string }>).detail?.token;
       if (isAuthenticated && token) registerPushTokenMutation.mutate({ token });
@@ -141,6 +145,16 @@ export default function Home() {
     window.addEventListener("tanryugram-native-push-token", handleNativePushToken);
     return () => window.removeEventListener("tanryugram-native-push-token", handleNativePushToken);
   }, [isAuthenticated, registerPushTokenMutation]);
+  useEffect(() => {
+    const handleNativeCallResponse = (event: Event) => {
+      const detail = (event as CustomEvent<{ callId?: number; status?: "declined" }>).detail;
+      const callId = Number(detail?.callId || 0);
+      if (!isAuthenticated || !callId || detail?.status !== "declined") return;
+      globalCallUpdateMutation.mutate({ callId, status: "declined", durationSeconds: 0 });
+    };
+    window.addEventListener("tanryugram-native-call-response", handleNativeCallResponse);
+    return () => window.removeEventListener("tanryugram-native-call-response", handleNativeCallResponse);
+  }, [isAuthenticated, globalCallUpdateMutation]);
   useEffect(() => {
     if (!isAuthenticated || !Capacitor.isNativePlatform()) return;
     let removeRegistrationListener: (() => Promise<void>) | undefined;
