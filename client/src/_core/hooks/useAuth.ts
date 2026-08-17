@@ -8,10 +8,8 @@ type UseAuthOptions = {
 };
 
 export function useAuth(options?: UseAuthOptions) {
-  // Login is started via startLogin() in the effect below, only when we actually
-  // navigate — never during render. startLogin() mints a one-time nonce + writes
-  // the state cookie, so calling it per render would overwrite the cookie and
-  // desync it from an in-flight login's `state`.
+  // Native TanRyuGram login is rendered by the public shell. Automatic redirects
+  // are reserved for an explicit local redirectPath and never open an external portal.
   const { redirectOnUnauthenticated = false, redirectPath } = options ?? {};
   const utils = trpc.useUtils();
   const [authTimedOut, setAuthTimedOut] = useState(false);

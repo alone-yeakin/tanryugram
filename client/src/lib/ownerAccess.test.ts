@@ -13,4 +13,8 @@ describe("canSeeOwnerStudio", () => {
   it("does not expose owner navigation to ordinary users", () => {
     expect(canSeeOwnerStudio({ email: "member@example.com", role: "user" })).toBe(false);
   });
+
+  it("does not expose owner navigation to non-owner admins or creators", () => {
+    expect(canSeeOwnerStudio({ email: "moderator@example.com", role: "admin", isCreator: true })).toBe(false);
+  });
 });

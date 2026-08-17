@@ -440,3 +440,6 @@
 - [x] Validate web TypeScript and production build; document the pre-existing external Apps Script mail-adapter test failure
 
 - [x] Authentication regression: trace why the web or Capacitor app still opens Manus login and remove that redirect while preserving TanRyuGram native account login
+
+- [x] Regression: remove the deployed legacy Manus app-auth redirect from all login and unauthorized paths
+- [x] Regression: enforce Creator Studio owner-only access on both client navigation and server procedures for every non-owner account

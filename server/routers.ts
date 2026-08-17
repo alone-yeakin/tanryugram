@@ -134,7 +134,7 @@ export const appRouter = router({
       if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found with this email" });
       
       if (!hasNativePassword(found)) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "This account has no native password. Continue with the current Manus account, or use Forgot password? to set one with a verification code." });
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "This account has no native password yet. Use Forgot password? to set a TanRyuGram password with a verification code." });
       }
       const expectedHash = Buffer.from(input.password).toString("base64");
       if (found.passwordHash !== expectedHash) {
