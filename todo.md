@@ -443,3 +443,9 @@
 
 - [x] Regression: remove the deployed legacy Manus app-auth redirect from all login and unauthorized paths
 - [x] Regression: enforce Creator Studio owner-only access on both client navigation and server procedures for every non-owner account
+
+- [x] Email delivery regression: diagnose why signup or password-reset verification emails are failing and restore delivery without exposing codes or secrets
+
+- [x] Brevo integration: add active transactional-email provider configuration while preserving the existing Gmail/Apps Script settings as a fallback
+- [x] Brevo integration: keep signup verification and password-reset codes email-only, rate-limited, and never exposed in UI or logs
+- [x] Security: ensure admin controls can force password reset or set a new password without revealing stored passwords

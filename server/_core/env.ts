@@ -13,4 +13,7 @@ export const ENV = {
   gmailSenderEmail: process.env.GMAIL_SENDER_EMAIL ?? "",
   mailApiUrl: process.env.MAIL_API_URL ?? "",
   mailApiSecret: process.env.MAIL_API_SECRET ?? "",
+  brevoApiKey: process.env.BREVO_API_KEY ?? "",
+  brevoSenderEmail: process.env.BREVO_SENDER_EMAIL ?? "",
+  brevoSenderName: process.env.BREVO_SENDER_NAME ?? "TanRyuGram",
 };
