@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { eq, and, or, like, desc, sql, inArray } from "drizzle-orm";
 import { canDeletePost, isTanryugramOwner } from "./authorization";
 import { resolveDisplayedFollowerCount } from "./followerStats";
-import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
+import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, emailDeliverySettings, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
@@ -65,6 +65,29 @@ export async function updateMediaUploadPolicy(userId: number, input: { photosEna
     await db.insert(mediaUploadPolicy).values({ photosEnabled: input.photosEnabled ?? true, videosEnabled: input.videosEnabled ?? false, updatedBy: userId });
   }
   return getMediaUploadPolicy();
+}
+export async function getEmailDeliverySettings() {
+  const db = await getDb();
+  if (!db) return { emailDeliveryEnabled: true, signupVerificationEnabled: false };
+  const existing = (await db.select().from(emailDeliverySettings).limit(1))[0];
+  if (existing) return existing;
+  await db.insert(emailDeliverySettings).values({ emailDeliveryEnabled: true, signupVerificationEnabled: false });
+  return (await db.select().from(emailDeliverySettings).limit(1))[0] ?? { emailDeliveryEnabled: true, signupVerificationEnabled: false };
+}
+export async function updateEmailDeliverySettings(userId: number, input: { emailDeliveryEnabled?: boolean; signupVerificationEnabled?: boolean }) {
+  const db = await getDb();
+  if (!db) return { emailDeliveryEnabled: input.emailDeliveryEnabled ?? true, signupVerificationEnabled: input.signupVerificationEnabled ?? false };
+  const existing = (await db.select().from(emailDeliverySettings).limit(1))[0];
+  if (existing) {
+    await db.update(emailDeliverySettings).set({
+      ...(input.emailDeliveryEnabled !== undefined ? { emailDeliveryEnabled: input.emailDeliveryEnabled } : {}),
+      ...(input.signupVerificationEnabled !== undefined ? { signupVerificationEnabled: input.signupVerificationEnabled } : {}),
+      updatedBy: userId,
+    }).where(eq(emailDeliverySettings.id, existing.id));
+  } else {
+    await db.insert(emailDeliverySettings).values({ emailDeliveryEnabled: input.emailDeliveryEnabled ?? true, signupVerificationEnabled: input.signupVerificationEnabled ?? false, updatedBy: userId });
+  }
+  return getEmailDeliverySettings();
 }
 export async function markNotificationRead(userId: number, notificationId?: number) { const db = await getDb(); if (!db) return; await db.update(notifications).set({ isRead: true }).where(notificationId ? and(eq(notifications.id, notificationId), eq(notifications.userId, userId)) : eq(notifications.userId, userId)); }
 export async function getMessages(userId: number, otherUserId: number) {

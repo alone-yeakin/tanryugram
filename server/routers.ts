@@ -74,34 +74,27 @@ export const appRouter = router({
       const existingUser = (await database.select().from(users).where(eq(users.username, input.username)).limit(1))[0];
       if (existingUser) throw new TRPCError({ code: "CONFLICT", message: "Username already taken" });
       
-      // Check total user count to implement conditional email verification (1st account free, 2nd+ account requires verification code)
-      const userCountRes = await database.select({ count: count() }).from(users);
-      const totalUsers = Number(userCountRes[0]?.count || 0);
-      
-      if (totalUsers >= 1) {
-        if (requiresEmailVerification(totalUsers, input.verificationCode)) {
+      const emailSettings = await db.getEmailDeliverySettings();
+      if (emailSettings.signupVerificationEnabled) {
+        if (!emailSettings.emailDeliveryEnabled) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Signup verification is enabled, but email delivery is currently disabled by the owner." });
+        }
+        if (!input.verificationCode?.trim()) {
           const code = Math.floor(100000 + Math.random() * 900000).toString();
-          const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
-          await database.insert(emailVerificationCodes).values({
-            email: input.email,
-            code,
-            expiresAt,
-          });
+          const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+          await database.insert(emailVerificationCodes).values({ email: input.email, code, expiresAt });
           try {
             await sendVerificationEmail({ to: input.email, code, purpose: "signup" });
           } catch (error) {
             await database.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, input.email));
             console.error("[EmailVerification] Delivery failed without exposing the code", error instanceof Error ? error.message : "unknown error");
-            throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "We could not send the verification email. Please try again later." });
+            throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "We could not send the verification email. The owner can temporarily disable signup verification while delivery is repaired." });
           }
           return { success: false, requiresVerification: true, message: "A verification code was sent to your email. It expires in 15 minutes." };
-        } else {
-          const record = (await database.select().from(emailVerificationCodes).where(and(eq(emailVerificationCodes.email, input.email), eq(emailVerificationCodes.code, input.verificationCode!))).limit(1))[0];
-          if (!isVerificationCodeValid(record)) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired verification code." });
-          }
-          await database.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, input.email));
         }
+        const record = (await database.select().from(emailVerificationCodes).where(and(eq(emailVerificationCodes.email, input.email), eq(emailVerificationCodes.code, input.verificationCode.trim()))).limit(1))[0];
+        if (!isVerificationCodeValid(record)) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired verification code." });
+        await database.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, input.email));
       }
 
       const openId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -154,6 +147,8 @@ export const appRouter = router({
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
       const found = (await database.select().from(users).where(eq(users.email, input.email)).limit(1))[0];
       if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "No account found with this email address" });
+      const emailSettings = await db.getEmailDeliverySettings();
+      if (!emailSettings.emailDeliveryEnabled) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Email delivery is currently disabled by the owner." });
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
       await database.insert(emailVerificationCodes).values({ email: input.email, code, expiresAt });
@@ -317,7 +312,7 @@ export const appRouter = router({
     // Payments completely removed for 200-user beta
     tips: protectedProcedure.query(() => []),
   }),
-  admin: router({ overview: ownerOnly.query(() => db.getAdminMetrics()), users: ownerOnly.query(() => db.getAllUsers()), posts: ownerOnly.query(() => db.getAllPosts()), badgeApplications: ownerOnly.query(() => db.getAllBadgeApplications()), uploadPolicy: ownerOnly.query(() => db.getMediaUploadPolicy()), setUploadPolicy: ownerOnly.input(z.object({ photosEnabled: z.boolean(), videosEnabled: z.boolean() })).mutation(({ ctx, input }) => db.updateMediaUploadPolicy(ctx.user.id, input)), verifyUser: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.verifyUser(input.userId, input.value)), setBadge: ownerOnly.input(z.object({ userId: z.number(), badgeType: z.enum(["none", "blue", "black"]) })).mutation(({ input }: { input: { userId: number; badgeType: "none" | "blue" | "black" } }) => db.setUserBadge(input.userId, input.badgeType)),     setCreator: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.setUserCreator(input.userId, input.value)),
+  admin: router({ overview: ownerOnly.query(() => db.getAdminMetrics()), users: ownerOnly.query(() => db.getAllUsers()), posts: ownerOnly.query(() => db.getAllPosts()), badgeApplications: ownerOnly.query(() => db.getAllBadgeApplications()), uploadPolicy: ownerOnly.query(() => db.getMediaUploadPolicy()), setUploadPolicy: ownerOnly.input(z.object({ photosEnabled: z.boolean(), videosEnabled: z.boolean() })).mutation(({ ctx, input }) => db.updateMediaUploadPolicy(ctx.user.id, input)), emailSettings: ownerOnly.query(() => db.getEmailDeliverySettings()), setEmailSettings: ownerOnly.input(z.object({ emailDeliveryEnabled: z.boolean(), signupVerificationEnabled: z.boolean() })).mutation(({ ctx, input }) => db.updateEmailDeliverySettings(ctx.user.id, input)), verifyUser: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.verifyUser(input.userId, input.value)), setBadge: ownerOnly.input(z.object({ userId: z.number(), badgeType: z.enum(["none", "blue", "black"]) })).mutation(({ input }: { input: { userId: number; badgeType: "none" | "blue" | "black" } }) => db.setUserBadge(input.userId, input.badgeType)),     setCreator: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.setUserCreator(input.userId, input.value)),
     setBadgeLabel: ownerOnly.input(z.object({ userId: z.number(), label: z.string().min(1).max(32) })).mutation(({ input }) => db.setBadgeLabel(input.userId, input.label)),
     setShowBadge: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }) => db.setShowBadge(input.userId, input.value)), setDisplayedFollowers: ownerOnly.input(z.object({ userId: z.number(), count: z.number().int().min(0).nullable() })).mutation(({ input }: { input: { userId: number; count: number | null } }) => db.setDisplayedFollowersCount(input.userId, input.count)), reviewBadge: ownerOnly.input(z.object({ applicationId: z.number(), status: z.enum(["approved", "rejected"]) })).mutation(({ ctx, input }) => db.reviewBadgeApplication(input.applicationId, ctx.user.id, input.status)), banUser: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.banUser(input.userId, input.value)), setRole: ownerOnly.input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) })).mutation(({ input }: { input: { userId: number; role: "user" | "admin" } }) => db.setUserRole(input.userId, input.role)), deletePost: protectedProcedure.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => { const result = await db.deletePostAsUser(input.postId, ctx.user.id, ctx.user.role === "admin" || isTanryugramOwner(ctx.user)); if (result.reason === "forbidden") throw new TRPCError({ code: "FORBIDDEN", message: "You can only delete your own posts" }); if (result.reason === "not_found") throw new TRPCError({ code: "NOT_FOUND", message: "Post not found" }); return result; }) }),
 });

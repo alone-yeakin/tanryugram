@@ -8,6 +8,14 @@ export const mediaUploadPolicy = mysqlTable("mediaUploadPolicy", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const emailDeliverySettings = mysqlTable("emailDeliverySettings", {
+  id: int("id").autoincrement().primaryKey(),
+  emailDeliveryEnabled: boolean("emailDeliveryEnabled").default(true).notNull(),
+  signupVerificationEnabled: boolean("signupVerificationEnabled").default(false).notNull(),
+  updatedBy: int("updatedBy"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const emailVerificationCodes = mysqlTable("emailVerificationCodes", {
   id: int("id").autoincrement().primaryKey(),
   email: varchar("email", { length: 320 }).notNull(),

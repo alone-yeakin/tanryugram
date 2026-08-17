@@ -449,3 +449,7 @@
 - [x] Brevo integration: add active transactional-email provider configuration while preserving the existing Gmail/Apps Script settings as a fallback
 - [x] Brevo integration: keep signup verification and password-reset codes email-only, rate-limited, and never exposed in UI or logs
 - [x] Security: ensure admin controls can force password reset or set a new password without revealing stored passwords
+
+- [x] Brevo send regression: capture a redacted provider error and make the actual verification-email failure diagnosable without exposing secrets or codes
+- [x] Owner settings: add persistent owner-only controls for email delivery enabled/disabled and signup verification required/optional
+- [x] Signup flow: honor owner verification settings while keeping password storage one-way and preventing admin password visibility

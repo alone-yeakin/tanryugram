@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { initialsAvatar, mediaSource } from "@/lib/mediaUrl";
 import { SafeImage } from "@/components/SafeImage";
 import { toast } from "sonner";
-import { ShieldCheck, Sparkles, UserCheck, UserX, Trash2, Lock, Camera, Check, ArrowRight, Bug, X, Plus } from "lucide-react";
+import { ShieldCheck, Sparkles, UserCheck, UserX, Trash2, Lock, Camera, Check, ArrowRight, Bug, X, Plus, Mail } from "lucide-react";
 import { BugReportModal } from "@/components/TanryugramBetaPolish";
 
 import { OnboardingScreen, EmailAuthForm } from "@/components/TanryugramBetaPolish";
@@ -51,6 +51,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const applicationsQuery = trpc.admin.badgeApplications.useQuery();
   const uploadPolicyQuery = trpc.admin.uploadPolicy.useQuery();
   const setUploadPolicyMutation = trpc.admin.setUploadPolicy.useMutation();
+  const emailSettingsQuery = trpc.admin.emailSettings.useQuery();
+  const setEmailSettingsMutation = trpc.admin.setEmailSettings.useMutation();
   const utils = trpc.useUtils();
 
   const [instagramConnected, setInstagramConnected] = useState(false);
@@ -63,7 +65,9 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const posts = postsQuery.data || [];
   const applications = applicationsQuery.data || [];
   const uploadPolicy = uploadPolicyQuery.data || { photosEnabled: true, videosEnabled: false };
+  const emailSettings = emailSettingsQuery.data || { emailDeliveryEnabled: true, signupVerificationEnabled: false };
   const updateUploadPolicy = (next: { photosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy) => { utils.admin.uploadPolicy.setData(undefined, policy); utils.media.policy.setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error) => toast.error(error.message) });
+  const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.emailSettings.setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error) => toast.error(error.message) });
 
   const handleInstagramConnect = () => {
     if (!instagramUser.trim()) {
@@ -128,6 +132,28 @@ export function AdminView({ onTip }: { onTip: () => void }) {
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${uploadPolicy.videosEnabled ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground"}`}>{uploadPolicy.videosEnabled ? "ON" : "OFF"}</span>
           </button>
         </div>
+      </div>
+
+      <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500">Account protection</p>
+            <h3 className="mt-1 flex items-center gap-2 font-semibold"><Mail className="h-4 w-4 text-violet-500" /> Email & verification controls</h3>
+            <p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted-foreground">Control whether TanRyuGram sends account emails and whether new accounts must verify an email address. These controls affect signup and password-reset delivery for everyone.</p>
+          </div>
+          <span className="w-fit rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">Owner only</span>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <button type="button" onClick={() => updateEmailSettings({ emailDeliveryEnabled: !emailSettings.emailDeliveryEnabled, signupVerificationEnabled: emailSettings.signupVerificationEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.emailDeliveryEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-rose-300 bg-rose-500/10"}`}>
+            <span><span className="block text-sm font-semibold">Email delivery</span><span className="mt-1 block text-[11px] text-muted-foreground">Brevo sends verification and password-reset messages.</span></span>
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${emailSettings.emailDeliveryEnabled ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"}`}>{emailSettings.emailDeliveryEnabled ? "ON" : "OFF"}</span>
+          </button>
+          <button type="button" onClick={() => updateEmailSettings({ emailDeliveryEnabled: emailSettings.emailDeliveryEnabled, signupVerificationEnabled: !emailSettings.signupVerificationEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.signupVerificationEnabled ? "border-violet-300 bg-violet-500/10" : "border-border bg-muted/40"}`}>
+            <span><span className="block text-sm font-semibold">Signup verification</span><span className="mt-1 block text-[11px] text-muted-foreground">Require a six-digit email code before creating new accounts.</span></span>
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${emailSettings.signupVerificationEnabled ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground"}`}>{emailSettings.signupVerificationEnabled ? "REQUIRED" : "OPTIONAL"}</span>
+          </button>
+        </div>
+        {!emailSettings.emailDeliveryEnabled && emailSettings.signupVerificationEnabled && <p className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">Signup verification is paused because email delivery is off. Turn email delivery on before enabling verification.</p>}
       </div>
 
       <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm space-y-6">
