@@ -175,7 +175,10 @@ export function CallOverlay({ callId, callType, isCaller, peer, onClose, onCallA
         return;
       }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: callType === "video" });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+          video: callType === "video" ? { facingMode: "user" } : false,
+        });
         if (cancelled) return;
         streamRef.current = stream;
         if (localVideo.current) localVideo.current.srcObject = stream;
@@ -191,7 +194,7 @@ export function CallOverlay({ callId, callType, isCaller, peer, onClose, onCallA
           await signal.mutateAsync({ callId, signalData: JSON.stringify({ kind: "offer", description: pc.localDescription }), status: "pending" });
         }
       } catch (error: any) {
-        const message = error?.name === "NotFoundError" ? "No microphone or camera device is available in this browser." : error?.name === "NotAllowedError" ? "Allow microphone and camera access in your browser to call." : error?.message || "Check microphone and camera permissions.";
+        const message = error?.name === "NotFoundError" ? "No microphone or camera device is available. On an emulator, enable a virtual microphone or test on a physical phone." : error?.name === "NotAllowedError" ? "Allow TanRyuGram microphone and camera permissions in Android Settings, then try again." : error?.name === "NotReadableError" ? "Android could not start the microphone. Close other apps using the mic, enable the emulator microphone, and try again." : error?.name === "OverconstrainedError" ? "The selected camera or microphone mode is unavailable on this device. Try an audio call or restart the app." : error?.message || "Android could not start the audio source. Check microphone permission and that no other app is using the mic.";
         setMediaError(message);
         toast.error("Could not start call", { description: message });
         await updateCall.mutateAsync({ callId, status: "ended", durationSeconds: 0 }).catch(() => undefined);

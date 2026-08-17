@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   BackHandler,
   Linking,
+  PermissionsAndroid,
   Platform,
   Pressable,
   SafeAreaView,
@@ -34,6 +35,14 @@ Notifications.setNotificationHandler({
   }),
 });
 
+async function requestCallMediaPermissions(callType: "audio" | "video") {
+  if (Platform.OS !== "android") return true;
+  const permissions = [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
+  if (callType === "video") permissions.push(PermissionsAndroid.PERMISSIONS.CAMERA);
+  const result = await PermissionsAndroid.requestMultiple(permissions);
+  return permissions.every((permission) => result[permission] === PermissionsAndroid.RESULTS.GRANTED);
+}
+
 async function registerForPushNotificationsAsync() {
   if (!Device.isDevice) return null;
   const existing = await Notifications.getPermissionsAsync();
@@ -44,6 +53,10 @@ async function registerForPushNotificationsAsync() {
   }
   if (status !== "granted") return null;
   if (Device.osName === "Android") {
+    await Notifications.setNotificationCategoryAsync("incoming_call", [
+      { identifier: "answer", buttonTitle: "Answer", options: { opensAppToForeground: true } },
+      { identifier: "decline", buttonTitle: "Decline", options: { isDestructive: true } },
+    ]).catch(() => undefined);
     for (const ringtone of ["default", "soft", "bright"] as RingtoneId[]) {
       await Notifications.setNotificationChannelAsync(ringtoneChannel(ringtone), {
         name: `TanRyuGram ${ringtone === "default" ? "system" : ringtone} calls`,
@@ -121,6 +134,9 @@ export default function App() {
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
       dispatchNativeCall(response.notification.request.content.data as Record<string, unknown>);
     });
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (mounted && response) dispatchNativeCall(response.notification.request.content.data as Record<string, unknown>);
+    }).catch(() => undefined);
     return () => {
       mounted = false;
       void registration;
@@ -166,8 +182,9 @@ export default function App() {
     }
   };
 
-  const openIncomingCall = useCallback(() => {
+  const openIncomingCall = useCallback(async () => {
     if (!incomingCall) return;
+    await requestCallMediaPermissions(incomingCall.callType).catch(() => undefined);
     const payload = JSON.stringify({ event: "incoming_call", route: "call", ...incomingCall });
     webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-call-open',{detail:${payload}})); true;`);
     setIncomingCall(null);
@@ -205,6 +222,7 @@ export default function App() {
           title: `Incoming ${message.callType || "audio"} call`,
           body: `${message.callerName || "A TanRyuGram member"} is calling you on TanRyuGram`,
           sound: ringtoneSound(selectedRingtone),
+          categoryIdentifier: "incoming_call",
           data: { event: "incoming_call", route: "call", callId: message.callId, callType: message.callType || "audio", callerName: message.callerName || "A TanRyuGram member", fullScreen: "true" },
           ...(Device.osName === "Android" ? { channelId: ringtoneChannel(selectedRingtone) } : {}),
         } as any,

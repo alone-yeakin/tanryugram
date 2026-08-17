@@ -11,6 +11,9 @@ describe("mobile companion integration contract", () => {
     expect(companionSource).toContain("tanryugram-native-call-response");
     expect(companionSource).toContain('status: \"declined\"');
     expect(companionSource).toContain("tanryugram-native-push-token");
+    expect(companionSource).toContain("getLastNotificationResponseAsync");
+    expect(companionSource).toContain("requestCallMediaPermissions");
+    expect(companionSource).toContain("PermissionsAndroid.PERMISSIONS.RECORD_AUDIO");
     expect(companionSource).toContain("Session expired · sign in again");
   });
 

@@ -470,3 +470,9 @@
 - [x] Login notice: replace the old security text with a manual email-verification outage apology and a reminder to remember the password without sharing it
 
 - [x] Brevo password-reset delivery regression: identify the provider rejection or sender authorization issue and restore reliable reset-email handling without exposing secrets or codes
+
+- [ ] Email delivery follow-up: determine why Brevo accepts API authentication but messages do not arrive, and prepare an alternative transport without breaking reset flows
+
+- [x] Call regression: deliver incoming calls to the Android home/lock screen through the native notification/full-screen path instead of only the in-app WebView
+- [x] Call regression: repair accepted-call microphone acquisition and provide a clear fallback/error state when the device or emulator denies audio input
+- [x] Call validation: add regression coverage for native call event routing, microphone permission handling, and call acceptance state transitions
