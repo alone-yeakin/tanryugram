@@ -28,9 +28,9 @@ export function LoginPanel({ onLogin }: { onLogin: () => void }) {
             <button onClick={() => setShowOnboarding(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-muted py-3 text-xs font-semibold transition hover:bg-muted/80">
               View Welcome Onboarding
             </button>
-            <div className="rounded-2xl bg-violet-500/10 p-4 text-xs text-violet-600 dark:text-violet-300">
+            <div className="rounded-2xl border border-amber-300/60 bg-amber-500/10 p-4 text-xs leading-5 text-amber-800 dark:text-amber-200">
               <ShieldCheck className="mb-1 h-4 w-4" />
-              Protected by end-to-end authentication, S3-compatible media isolation, and active admin moderation.
+              Sorry for the email-verification issue. Our email service is currently having problems, so verification may need to be handled manually for now. Please remember your password after registration. Never share your password, private email, verification code, or reset link with anyone.
             </div>
           </div>
         </div>

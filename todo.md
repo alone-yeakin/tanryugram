@@ -466,3 +466,5 @@
 - [x] Registration: add an optional self-described gender selection without making it public by default
 - [x] Avatar defaults: stop assigning gendered avatars and use a neutral default until the user chooses an image
 - [x] Validation: test signup persistence, profile privacy, and neutral avatar fallback behavior
+
+- [x] Login notice: replace the old security text with a manual email-verification outage apology and a reminder to remember the password without sharing it
