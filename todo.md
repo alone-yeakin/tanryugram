@@ -476,3 +476,5 @@
 - [x] Call regression: deliver incoming calls to the Android home/lock screen through the native notification/full-screen path instead of only the in-app WebView
 - [x] Call regression: repair accepted-call microphone acquisition and provide a clear fallback/error state when the device or emulator denies audio input
 - [x] Call validation: add regression coverage for native call event routing, microphone permission handling, and call acceptance state transitions
+
+- [x] APK delivery: locate the latest verified Android APK and attach it, clearly identifying whether it includes the newest call fixes
