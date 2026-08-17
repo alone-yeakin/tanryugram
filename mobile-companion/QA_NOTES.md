@@ -9,3 +9,7 @@ The native-only incoming-call card cannot be rendered by the web preview because
 ## Known test environment limitation
 
 The full Vitest suite currently contains one pre-existing external integration failure in `server/mailAdapter.test.ts`: the configured `MAIL_API_URL` returned an HTML document, so the test could not parse the expected JSON response. This test is unrelated to the mobile companion changes. The project typecheck, mobile TypeScript check, and focused mobile integration contract test pass.
+
+## Final responsive observation
+
+The latest 390 × 844 capture shows the expected unauthenticated welcome and email/password authentication surface. This confirms the native wrapper’s signed-out state has a clear entry point; authenticated-only Contacts, Calls & ringtone, and WebRTC controls remain behind the existing login boundary.
