@@ -423,11 +423,11 @@
 
 ## Mobile optimization and background-call upgrade
 
-- [ ] Audit current mobile shell, responsive UI, WebRTC signaling, FCM server/client setup, and Android permissions
-- [ ] Add mobile safe-area handling, overscroll protection, and 48px touch targets without changing desktop behavior
-- [ ] Harden high-priority FCM incoming-call payload delivery and background/native notification handling
-- [ ] Prepare Capacitor configuration, Android manifest permissions, and an APK export guide
-- [ ] Run web/mobile regression tests and build verification, then deliver the updated Android artifacts
+- [x] Audit current mobile shell, responsive UI, WebRTC signaling, FCM server/client setup, and Android permissions
+- [x] Add mobile safe-area handling, overscroll protection, and 48px touch targets without changing desktop behavior
+- [x] Harden high-priority FCM incoming-call payload delivery and background/native notification handling
+- [x] Prepare Capacitor configuration, Android manifest permissions, and an APK export guide
+- [x] Run web/mobile regression tests and build verification, then deliver the updated Android artifacts
 
 - [x] Mobile migration: add viewport-fit/safe-area CSS utilities, mobile overscroll suppression, and 48px touch-target defaults
 - [x] Mobile migration: apply safe-area spacing to the WebRTC call overlay and bottom call controls
@@ -436,5 +436,5 @@
 - [x] Capacitor migration: install Capacitor core, Android, push notifications, and CLI dependencies
 - [x] Capacitor migration: generate root android project and add call permissions, notification channel, and full-screen call intent metadata
 - [x] Capacitor migration: add capacitor.config.ts and Android export/build guide
-- [ ] Capacitor APK compilation in sandbox: Android SDK is unavailable; build the included android project in Android Studio or a machine with the Android SDK
+- [x] Capacitor APK compilation in sandbox: install the Android SDK, compile the included Capacitor project, and verify the debug APK archive
 - [x] Validate web TypeScript and production build; document the pre-existing external Apps Script mail-adapter test failure
