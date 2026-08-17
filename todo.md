@@ -468,3 +468,5 @@
 - [x] Validation: test signup persistence, profile privacy, and neutral avatar fallback behavior
 
 - [x] Login notice: replace the old security text with a manual email-verification outage apology and a reminder to remember the password without sharing it
+
+- [x] Brevo password-reset delivery regression: identify the provider rejection or sender authorization issue and restore reliable reset-email handling without exposing secrets or codes

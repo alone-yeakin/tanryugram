@@ -9,7 +9,10 @@ describe("Brevo credentials", () => {
       headers: { "api-key": apiKey, accept: "application/json" },
     });
 
-    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      const providerText = (await response.text()).replace(/\b(xkeysib|api-key|key)\b[^\s]*/gi, "[redacted]").slice(0, 240);
+      throw new Error(`Brevo account endpoint rejected the configured key (${response.status}): ${providerText}`);
+    }
     const payload = await response.json() as { email?: string; companyName?: string };
     expect(typeof payload).toBe("object");
   }, 20_000);
