@@ -5,7 +5,6 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { startLogin } from "./const";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -18,7 +17,9 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  startLogin();
+  // The public Home route renders TanRyuGram's native email/password panel.
+  // Do not redirect unauthorized API responses to the legacy Manus portal.
+
 };
 
 queryClient.getQueryCache().subscribe(event => {
@@ -43,10 +44,8 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       headers() {
-        // Preview auto-login fallback: when the browser blocks iframe cookies
-        // (Safari ITP / private browsing / WebView), the runtime mirrors the
-        // session into sessionStorage so we can forward it as a Bearer token.
-        // The regular OAuth cookie flow keeps working and takes priority server-side.
+        // Preserve the existing native session bridge for already-authenticated
+        // preview/WebView sessions. It does not initiate any external login flow.
         try {
           const raw = sessionStorage.getItem("manus-cookie");
           if (raw) {

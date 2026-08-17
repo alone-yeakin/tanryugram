@@ -1,4 +1,3 @@
-import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -88,12 +87,10 @@ export function useAuth(options?: UseAuthOptions) {
     if (typeof window === "undefined") return;
     if (redirectPath && window.location.pathname === redirectPath) return;
 
-    // Navigate at this moment only. startLogin() mints the nonce + cookie itself.
-    if (redirectPath) {
-      window.location.href = redirectPath;
-    } else {
-      startLogin();
-    }
+    // Native TanRyuGram authentication is rendered by the public app shell.
+    // Never auto-redirect to the legacy Manus OAuth portal.
+    if (redirectPath) window.location.href = redirectPath;
+    else window.location.href = "/";
   }, [
     redirectOnUnauthenticated,
     redirectPath,

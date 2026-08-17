@@ -438,3 +438,5 @@
 - [x] Capacitor migration: add capacitor.config.ts and Android export/build guide
 - [x] Capacitor APK compilation in sandbox: install the Android SDK, compile the included Capacitor project, and verify the debug APK archive
 - [x] Validate web TypeScript and production build; document the pre-existing external Apps Script mail-adapter test failure
+
+- [x] Authentication regression: trace why the web or Capacitor app still opens Manus login and remove that redirect while preserving TanRyuGram native account login
