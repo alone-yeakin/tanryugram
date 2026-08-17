@@ -98,16 +98,21 @@ export default function App() {
         webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-push-token',{detail:{token:${JSON.stringify(token)}}})); true;`);
       })
       .catch(() => undefined);
+    const dispatchNativeCall = (data: Record<string, unknown>) => {
+      if (data?.route !== "call" && data?.event !== "incoming_call" && !data?.callId) return;
+      const payload = JSON.stringify(data);
+      webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-call-open',{detail:${payload}})); true;`);
+    };
+    const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      dispatchNativeCall(notification.request.content.data as Record<string, unknown>);
+    });
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { callId?: number; route?: string };
-      if (data?.route === "call" || data?.callId) {
-        const payload = JSON.stringify(data);
-        webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-call-open',{detail:${payload}})); true;`);
-      }
+      dispatchNativeCall(response.notification.request.content.data as Record<string, unknown>);
     });
     return () => {
       mounted = false;
       void registration;
+      receivedSubscription.remove();
       responseSubscription.remove();
     };
   }, []);
@@ -165,7 +170,7 @@ export default function App() {
           title: `Incoming ${message.callType || "audio"} call`,
           body: `${message.callerName || "A TanRyuGram member"} is calling you on TanRyuGram`,
           sound: ringtoneSound(selectedRingtone),
-          data: { route: "call", callId: message.callId, callType: message.callType || "audio", callerName: message.callerName || "A TanRyuGram member" },
+          data: { event: "incoming_call", route: "call", callId: message.callId, callType: message.callType || "audio", callerName: message.callerName || "A TanRyuGram member", fullScreen: "true" },
           ...(Device.osName === "Android" ? { channelId: ringtoneChannel(selectedRingtone) } : {}),
         } as any,
         trigger: null,

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
 import { startLogin } from "@/const";
 import { useTheme } from "@/contexts/ThemeContext";
 import { trpc } from "@/lib/trpc";
@@ -138,6 +140,20 @@ export default function Home() {
     };
     window.addEventListener("tanryugram-native-push-token", handleNativePushToken);
     return () => window.removeEventListener("tanryugram-native-push-token", handleNativePushToken);
+  }, [isAuthenticated, registerPushTokenMutation]);
+  useEffect(() => {
+    if (!isAuthenticated || !Capacitor.isNativePlatform()) return;
+    let removeRegistrationListener: (() => Promise<void>) | undefined;
+    let active = true;
+    void PushNotifications.addListener("registration", ({ value }) => {
+      if (active && value) registerPushTokenMutation.mutate({ token: value });
+    }).then((handle) => { removeRegistrationListener = handle.remove; });
+    void (async () => {
+      const permission = await PushNotifications.checkPermissions();
+      const result = permission.receive === "granted" ? permission : await PushNotifications.requestPermissions();
+      if (active && result.receive === "granted") await PushNotifications.register();
+    })().catch(() => undefined);
+    return () => { active = false; void removeRegistrationListener?.(); };
   }, [isAuthenticated, registerPushTokenMutation]);
   // Payment mutations removed for beta stability
   const realPosts = feed.data?.map((row: any) => { const creator = row.creator || {}; return { id: row.post.id, userId: row.post.userId, creator: { userId: row.post.userId, name: creator.name || "Tanryugram creator", username: creator.username || `creator-${row.post.userId}`, avatar: creator.avatarUrl || null, verified: Boolean(creator.isVerified), badgeType: creator.badgeType, badgeLabel: creator.badgeLabel, showBadge: creator.showBadge, role: creator.badgeLabel || (creator.isCreator ? "Creator" : "Member") }, media: row.post.mediaUrl, caption: row.post.caption || "", likes: row.post.likesCount, comments: row.post.commentsCount, time: "Recently", tag: row.post.isPremium ? "PREMIUM" : "FROM THE COMMUNITY", premium: row.post.isPremium }; }) || [];

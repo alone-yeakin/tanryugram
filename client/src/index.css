@@ -189,3 +189,53 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--foreground) 16%, transparent); border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: color-mix(in oklab, var(--foreground) 26%, transparent); }
+
+/* Android/WebView mobile ergonomics: keep content clear of notches and gesture bars. */
+:root {
+  --tanry-safe-top: env(safe-area-inset-top, 0px);
+  --tanry-safe-right: env(safe-area-inset-right, 0px);
+  --tanry-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tanry-safe-left: env(safe-area-inset-left, 0px);
+}
+
+html,
+body,
+#root {
+  overscroll-behavior-y: none;
+}
+
+.safe-area-top {
+  padding-top: var(--tanry-safe-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: var(--tanry-safe-bottom);
+}
+
+.safe-area-x {
+  padding-left: var(--tanry-safe-left);
+  padding-right: var(--tanry-safe-right);
+}
+
+@media (max-width: 767px) {
+  button,
+  [role="button"],
+  input,
+  textarea,
+  select {
+    min-height: 48px;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  [data-mobile-call-bar],
+  [data-mobile-chat-bar],
+  [data-mobile-drawer] {
+    padding-top: max(0.5rem, var(--tanry-safe-top));
+    padding-bottom: max(0.5rem, var(--tanry-safe-bottom));
+  }
+}
