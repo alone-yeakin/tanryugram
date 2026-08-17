@@ -462,3 +462,7 @@
 - [x] Official recovery portal: add a TanRyuGram-controlled recovery page and bot-style guidance for secure password resets
 - [x] Recovery safety copy: warn users never to share private email addresses, passwords, verification codes, or reset links
 - [x] Recovery integration: connect the official portal to the existing email reset and guest owner-support settings without exposing passwords
+
+- [x] Registration: add an optional self-described gender selection without making it public by default
+- [x] Avatar defaults: stop assigning gendered avatars and use a neutral default until the user chooses an image
+- [x] Validation: test signup persistence, profile privacy, and neutral avatar fallback behavior

@@ -1,0 +1,1 @@
+ALTER TABLE `userSettings` ADD `gender` varchar(32);

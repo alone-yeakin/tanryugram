@@ -56,6 +56,7 @@ export function EmailAuthForm({ onLoginSuccess }: { onLoginSuccess: () => void }
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
+  const [gender, setGender] = useState<"" | "woman" | "man" | "non_binary" | "prefer_not_to_say">("");
   const [newPassword, setNewPassword] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [requiresVerification, setRequiresVerification] = useState(false);
@@ -132,7 +133,7 @@ export function EmailAuthForm({ onLoginSuccess }: { onLoginSuccess: () => void }
       loginMutation.mutate({ email, password });
     } else if (mode === "signup") {
       if (!email || !password || !name || !username) return toast.error("Please fill in all fields");
-      signupMutation.mutate({ email, password, name, username, verificationCode: verificationCode.trim() || undefined });
+      signupMutation.mutate({ email, password, name, username, gender: gender || undefined, verificationCode: verificationCode.trim() || undefined });
     } else if (mode === "forgot") {
       if (!resetRequested) {
         if (!email) return toast.error("Please enter your email address");
@@ -177,6 +178,17 @@ export function EmailAuthForm({ onLoginSuccess }: { onLoginSuccess: () => void }
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-violet-500"
               />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Gender <span className="font-normal">(optional)</span></label>
+              <select value={gender} onChange={(e) => setGender(e.target.value as typeof gender)} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-violet-500">
+                <option value="">Prefer not to choose</option>
+                <option value="woman">Woman</option>
+                <option value="man">Man</option>
+                <option value="non_binary">Non-binary</option>
+                <option value="prefer_not_to_say">Prefer not to say</option>
+              </select>
+              <p className="mt-1 text-[10px] text-muted-foreground">This is stored privately and does not choose your avatar.</p>
             </div>
           </>
         )}

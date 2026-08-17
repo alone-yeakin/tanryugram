@@ -14,7 +14,7 @@ import { eq, and, count, desc, sql } from "drizzle-orm";
 import { sdk } from "./_core/sdk";
 import { ENV } from "./_core/env";
 import { sendIncomingCallPush } from "./firebaseAdmin";
-import { users, messages, emailVerificationCodes } from "../drizzle/schema";
+import { users, messages, emailVerificationCodes, userSettings } from "../drizzle/schema";
 
 const stripe = () => {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -76,7 +76,7 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(({ ctx }) => sanitizeAuthUser(ctx.user)),
     logout: publicProcedure.mutation(({ ctx }) => { ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), maxAge: -1 }); return { success: true } as const; }),
-    signup: publicProcedure.input(z.object({ email: z.string().email(), password: z.string().min(6), name: z.string().min(1), username: z.string().min(3), verificationCode: z.string().optional() })).mutation(async ({ ctx, input }) => {
+    signup: publicProcedure.input(z.object({ email: z.string().email(), password: z.string().min(6), name: z.string().min(1), username: z.string().min(3), gender: z.enum(["woman", "man", "non_binary", "prefer_not_to_say"]).optional(), verificationCode: z.string().optional() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
       const existing = (await database.select().from(users).where(eq(users.email, input.email)).limit(1))[0];
@@ -115,10 +115,11 @@ export const appRouter = router({
         name: input.name,
         username: input.username,
         passwordHash,
-        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${input.username}`,
+        avatarUrl: null,
         isVerified: false,
         role: "user"
       });
+      await database.insert(userSettings).values({ userId: Number(insertedId.insertId || 0), gender: input.gender ?? null });
       const insertedPk = Number(insertedId.insertId || 0);
       const newUser = (await database.select().from(users).where(eq(users.id, insertedPk)).limit(1))[0] || (await database.select().from(users).where(eq(users.openId, openId)).limit(1))[0];
       

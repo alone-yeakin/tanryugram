@@ -225,6 +225,7 @@ export const userSettings = mysqlTable("userSettings", {
   isLocked: boolean("isLocked").default(false).notNull(),
   lockPin: varchar("lockPin", { length: 16 }),
   isPrivate: boolean("isPrivate").default(false).notNull(),
+  gender: varchar("gender", { length: 32 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
