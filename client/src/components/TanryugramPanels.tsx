@@ -78,6 +78,7 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const recoverySettings = recoverySettingsQuery.data || { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
   const [whatsappNumber, setWhatsappNumber] = useState(recoverySettings.whatsappSupportNumber);
   const [recoveryReplies, setRecoveryReplies] = useState<Record<number, string>>({});
+  const [betaPreviewCounts, setBetaPreviewCounts] = useState<Record<number, number>>({});
   const updateUploadPolicy = (next: { photosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy) => { utils.admin.uploadPolicy.setData(undefined, policy); utils.media.policy.setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error) => toast.error(error.message) });
   const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.emailSettings.setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error) => toast.error(error.message) });
   const updateRecoverySettings = (next: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) => setRecoverySettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.recoverySettings.setData(undefined, settings); setWhatsappNumber(settings.whatsappSupportNumber); utils.recovery.settings.invalidate(); toast.success("Recovery support settings updated"); }, onError: (error) => toast.error(error.message) });
@@ -123,6 +124,31 @@ export function AdminView({ onTip }: { onTip: () => void }) {
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="rounded-[28px] border border-amber-300/70 bg-amber-500/5 p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600">Beta preview · not public metrics</p>
+            <h3 className="mt-1 flex items-center gap-2 font-semibold"><Bug className="h-4 w-4 text-amber-600" /> Preview controls</h3>
+            <p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted-foreground">These buttons affect only this owner-panel preview in this browser session. They never create likes, never change public counts, and never appear to users.</p>
+          </div>
+          <span className="w-fit rounded-full bg-amber-500/15 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Test only</span>
+        </div>
+        <div className="mt-5 space-y-3">
+          {posts.slice(0, 5).map((item: any) => {
+            const previewCount = betaPreviewCounts[item.post.id] || 0;
+            const realCount = item.post.likesCount || 0;
+            return <div key={item.post.id} className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0"><p className="truncate text-xs font-semibold">{item.post.caption || `Post #${item.post.id}`}</p><p className="mt-1 text-[10px] text-muted-foreground">Real likes: {realCount} · Beta preview only: {previewCount}</p></div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => setBetaPreviewCounts((current) => ({ ...current, [item.post.id]: (current[item.post.id] || 0) + 1 }))} className="min-h-10 rounded-xl border border-amber-300 bg-amber-500/10 px-3 py-2 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-500/20 dark:text-amber-300">Preview +1</button>
+                <button type="button" onClick={() => setBetaPreviewCounts((current) => ({ ...current, [item.post.id]: 0 }))} className="min-h-10 rounded-xl border border-border bg-card px-3 py-2 text-[10px] font-semibold transition hover:border-amber-300">Reset preview</button>
+              </div>
+            </div>;
+          })}
+          {posts.length === 0 && <p className="rounded-2xl border border-dashed border-border p-4 text-center text-[11px] text-muted-foreground">Create a post to preview the clearly labeled beta controls.</p>}
         </div>
       </div>
 

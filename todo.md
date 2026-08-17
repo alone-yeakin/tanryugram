@@ -478,3 +478,5 @@
 - [x] Call validation: add regression coverage for native call event routing, microphone permission handling, and call acceptance state transitions
 
 - [x] APK delivery: locate the latest verified Android APK and attach it, clearly identifying whether it includes the newest call fixes
+
+- [x] Admin beta controls: add a clearly labeled, owner-only preview-controls section isolated from genuine public like counts
