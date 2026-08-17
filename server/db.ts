@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { eq, and, or, like, desc, sql, inArray } from "drizzle-orm";
 import { canDeletePost, isTanryugramOwner } from "./authorization";
 import { resolveDisplayedFollowerCount } from "./followerStats";
-import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, emailDeliverySettings, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
+import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, emailDeliverySettings, recoverySupportSettings, recoverySupportRequests, recoverySupportMessages, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
@@ -88,6 +88,57 @@ export async function updateEmailDeliverySettings(userId: number, input: { email
     await db.insert(emailDeliverySettings).values({ emailDeliveryEnabled: input.emailDeliveryEnabled ?? true, signupVerificationEnabled: input.signupVerificationEnabled ?? false, updatedBy: userId });
   }
   return getEmailDeliverySettings();
+}
+export async function getRecoverySupportSettings() {
+  const db = await getDb();
+  if (!db) return { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
+  const existing = (await db.select().from(recoverySupportSettings).limit(1))[0];
+  if (existing) return existing;
+  await db.insert(recoverySupportSettings).values({ guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" });
+  return (await db.select().from(recoverySupportSettings).limit(1))[0] ?? { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
+}
+export async function updateRecoverySupportSettings(userId: number, input: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) {
+  const db = await getDb();
+  if (!db) return input;
+  const existing = (await db.select().from(recoverySupportSettings).limit(1))[0];
+  if (existing) {
+    await db.update(recoverySupportSettings).set({ ...input, updatedBy: userId }).where(eq(recoverySupportSettings.id, existing.id));
+  } else {
+    await db.insert(recoverySupportSettings).values({ ...input, updatedBy: userId });
+  }
+  return getRecoverySupportSettings();
+}
+export async function createRecoverySupportRequest(input: { guestTokenHash: string; accountEmail?: string; guestLabel?: string }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const [result] = await db.insert(recoverySupportRequests).values({ ...input, expiresAt });
+  const id = Number(result.insertId || 0);
+  return (await db.select({ id: recoverySupportRequests.id, accountEmail: recoverySupportRequests.accountEmail, guestLabel: recoverySupportRequests.guestLabel, status: recoverySupportRequests.status, createdAt: recoverySupportRequests.createdAt, expiresAt: recoverySupportRequests.expiresAt }).from(recoverySupportRequests).where(eq(recoverySupportRequests.id, id)).limit(1))[0];
+}
+export async function getRecoverySupportRequestByHash(guestTokenHash: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  return (await db.select().from(recoverySupportRequests).where(and(eq(recoverySupportRequests.guestTokenHash, guestTokenHash), eq(recoverySupportRequests.status, "open"), sql`${recoverySupportRequests.expiresAt} > NOW()`)).limit(1))[0];
+}
+export async function addRecoverySupportMessage(requestId: number, senderType: "guest" | "owner", body: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.insert(recoverySupportMessages).values({ requestId, senderType, body });
+  await db.update(recoverySupportRequests).set({ lastMessageAt: new Date() }).where(eq(recoverySupportRequests.id, requestId));
+  return (await db.select().from(recoverySupportMessages).where(and(eq(recoverySupportMessages.requestId, requestId), eq(recoverySupportMessages.senderType, senderType))).orderBy(desc(recoverySupportMessages.createdAt)).limit(1))[0];
+}
+export async function getRecoverySupportInbox() {
+  const db = await getDb();
+  if (!db) return [];
+  const requests = await db.select({ id: recoverySupportRequests.id, accountEmail: recoverySupportRequests.accountEmail, guestLabel: recoverySupportRequests.guestLabel, status: recoverySupportRequests.status, createdAt: recoverySupportRequests.createdAt, expiresAt: recoverySupportRequests.expiresAt, lastMessageAt: recoverySupportRequests.lastMessageAt }).from(recoverySupportRequests).orderBy(desc(recoverySupportRequests.lastMessageAt), desc(recoverySupportRequests.createdAt)).limit(100);
+  const messages = await db.select({ id: recoverySupportMessages.id, requestId: recoverySupportMessages.requestId, senderType: recoverySupportMessages.senderType, body: recoverySupportMessages.body, createdAt: recoverySupportMessages.createdAt }).from(recoverySupportMessages).orderBy(recoverySupportMessages.createdAt);
+  return requests.map((request) => ({ ...request, messages: messages.filter((message) => message.requestId === request.id) }));
+}
+export async function closeRecoverySupportRequest(requestId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(recoverySupportRequests).set({ status: "closed" }).where(eq(recoverySupportRequests.id, requestId));
 }
 export async function markNotificationRead(userId: number, notificationId?: number) { const db = await getDb(); if (!db) return; await db.update(notifications).set({ isRead: true }).where(notificationId ? and(eq(notifications.id, notificationId), eq(notifications.userId, userId)) : eq(notifications.userId, userId)); }
 export async function getMessages(userId: number, otherUserId: number) {

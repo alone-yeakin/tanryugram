@@ -16,6 +16,34 @@ export const emailDeliverySettings = mysqlTable("emailDeliverySettings", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const recoverySupportSettings = mysqlTable("recoverySupportSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  guestRecoveryEnabled: boolean("guestRecoveryEnabled").default(false).notNull(),
+  whatsappSupportEnabled: boolean("whatsappSupportEnabled").default(false).notNull(),
+  whatsappSupportNumber: varchar("whatsappSupportNumber", { length: 32 }).default("+8801404841981").notNull(),
+  updatedBy: int("updatedBy"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const recoverySupportRequests = mysqlTable("recoverySupportRequests", {
+  id: int("id").autoincrement().primaryKey(),
+  guestTokenHash: varchar("guestTokenHash", { length: 128 }).notNull().unique(),
+  accountEmail: varchar("accountEmail", { length: 320 }),
+  guestLabel: varchar("guestLabel", { length: 80 }),
+  status: mysqlEnum("status", ["open", "closed"]).default("open").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  lastMessageAt: timestamp("lastMessageAt"),
+});
+
+export const recoverySupportMessages = mysqlTable("recoverySupportMessages", {
+  id: int("id").autoincrement().primaryKey(),
+  requestId: int("requestId").notNull(),
+  senderType: mysqlEnum("senderType", ["guest", "owner"]).default("guest").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export const emailVerificationCodes = mysqlTable("emailVerificationCodes", {
   id: int("id").autoincrement().primaryKey(),
   email: varchar("email", { length: 320 }).notNull(),

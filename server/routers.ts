@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createHash, randomBytes } from "node:crypto";
 import Stripe from "stripe";
 import { TRPCError } from "@trpc/server";
 import { isTanryugramOwner } from "./authorization";
@@ -60,6 +61,15 @@ export const sanitizeAuthUser = (user: any) => {
 export const hasNativePassword = (user: any) => Boolean(user?.passwordHash);
 export const requiresEmailVerification = (totalUsers: number, verificationCode?: string | null) => totalUsers >= 1 && !verificationCode?.trim();
 export const isVerificationCodeValid = (record: { expiresAt: Date | string } | undefined, now = new Date()) => Boolean(record && now <= new Date(record.expiresAt));
+
+function hashGuestToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+function normalizeWhatsAppNumber(value: string) {
+  const normalized = value.replace(/[\s().-]/g, "");
+  if (!/^\+[1-9][0-9]{6,14}$/.test(normalized)) throw new TRPCError({ code: "BAD_REQUEST", message: "Use an international WhatsApp number beginning with +." });
+  return normalized;
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -175,6 +185,34 @@ export const appRouter = router({
       const passwordHash = Buffer.from(input.newPassword).toString("base64");
       await database.update(users).set({ passwordHash }).where(eq(users.id, found.id));
       return { success: true, message: "Password updated successfully with verification code. You can now sign in." };
+    }),
+  }),
+  recovery: router({
+    settings: publicProcedure.query(async () => {
+      const settings = await db.getRecoverySupportSettings();
+      const digits = settings.whatsappSupportNumber.replace(/\D/g, "");
+      return { guestRecoveryEnabled: settings.guestRecoveryEnabled, whatsappSupportEnabled: settings.whatsappSupportEnabled, whatsappSupportNumber: settings.whatsappSupportNumber, whatsappLink: settings.whatsappSupportEnabled ? `https://wa.me/${digits}` : null };
+    }),
+    createGuest: publicProcedure.input(z.object({ accountEmail: z.string().email().optional(), guestLabel: z.string().trim().min(1).max(80).optional() })).mutation(async ({ input }) => {
+      const settings = await db.getRecoverySupportSettings();
+      if (!settings.guestRecoveryEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Guest recovery support is currently disabled." });
+      const token = randomBytes(32).toString("base64url");
+      const request = await db.createRecoverySupportRequest({ guestTokenHash: hashGuestToken(token), accountEmail: input.accountEmail, guestLabel: input.guestLabel });
+      if (!request) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Recovery support is temporarily unavailable." });
+      return { requestId: request.id, guestToken: token, expiresAt: request.expiresAt };
+    }),
+    thread: publicProcedure.input(z.object({ guestToken: z.string().min(20).max(128) })).query(async ({ input }) => {
+      const request = await db.getRecoverySupportRequestByHash(hashGuestToken(input.guestToken));
+      if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This recovery guest ID is invalid or expired." });
+      const inbox = await db.getRecoverySupportInbox();
+      return inbox.find((item) => item.id === request.id) ?? { id: request.id, messages: [] };
+    }),
+    sendMessage: publicProcedure.input(z.object({ guestToken: z.string().min(20).max(128), body: z.string().trim().min(1).max(1000) })).mutation(async ({ input }) => {
+      const request = await db.getRecoverySupportRequestByHash(hashGuestToken(input.guestToken));
+      if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This recovery guest ID is invalid or expired." });
+      if (request.lastMessageAt && Date.now() - new Date(request.lastMessageAt).getTime() < 30_000) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Please wait 30 seconds before sending another recovery message." });
+      await db.addRecoverySupportMessage(request.id, "guest", input.body.trim());
+      return { success: true, message: "Your recovery request was sent to the owner." };
     }),
   }),
   discovery: router({
@@ -312,7 +350,7 @@ export const appRouter = router({
     // Payments completely removed for 200-user beta
     tips: protectedProcedure.query(() => []),
   }),
-  admin: router({ overview: ownerOnly.query(() => db.getAdminMetrics()), users: ownerOnly.query(() => db.getAllUsers()), posts: ownerOnly.query(() => db.getAllPosts()), badgeApplications: ownerOnly.query(() => db.getAllBadgeApplications()), uploadPolicy: ownerOnly.query(() => db.getMediaUploadPolicy()), setUploadPolicy: ownerOnly.input(z.object({ photosEnabled: z.boolean(), videosEnabled: z.boolean() })).mutation(({ ctx, input }) => db.updateMediaUploadPolicy(ctx.user.id, input)), emailSettings: ownerOnly.query(() => db.getEmailDeliverySettings()), setEmailSettings: ownerOnly.input(z.object({ emailDeliveryEnabled: z.boolean(), signupVerificationEnabled: z.boolean() })).mutation(({ ctx, input }) => db.updateEmailDeliverySettings(ctx.user.id, input)), verifyUser: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.verifyUser(input.userId, input.value)), setBadge: ownerOnly.input(z.object({ userId: z.number(), badgeType: z.enum(["none", "blue", "black"]) })).mutation(({ input }: { input: { userId: number; badgeType: "none" | "blue" | "black" } }) => db.setUserBadge(input.userId, input.badgeType)),     setCreator: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.setUserCreator(input.userId, input.value)),
+  admin: router({ overview: ownerOnly.query(() => db.getAdminMetrics()), users: ownerOnly.query(() => db.getAllUsers()), posts: ownerOnly.query(() => db.getAllPosts()), badgeApplications: ownerOnly.query(() => db.getAllBadgeApplications()), uploadPolicy: ownerOnly.query(() => db.getMediaUploadPolicy()), setUploadPolicy: ownerOnly.input(z.object({ photosEnabled: z.boolean(), videosEnabled: z.boolean() })).mutation(({ ctx, input }) => db.updateMediaUploadPolicy(ctx.user.id, input)), emailSettings: ownerOnly.query(() => db.getEmailDeliverySettings()), setEmailSettings: ownerOnly.input(z.object({ emailDeliveryEnabled: z.boolean(), signupVerificationEnabled: z.boolean() })).mutation(({ ctx, input }) => db.updateEmailDeliverySettings(ctx.user.id, input)), recoverySettings: ownerOnly.query(() => db.getRecoverySupportSettings()), setRecoverySettings: ownerOnly.input(z.object({ guestRecoveryEnabled: z.boolean(), whatsappSupportEnabled: z.boolean(), whatsappSupportNumber: z.string().min(7).max(32) })).mutation(({ ctx, input }) => db.updateRecoverySupportSettings(ctx.user.id, { ...input, whatsappSupportNumber: normalizeWhatsAppNumber(input.whatsappSupportNumber) })), recoveryInbox: ownerOnly.query(() => db.getRecoverySupportInbox()), replyRecovery: ownerOnly.input(z.object({ requestId: z.number().int().positive(), body: z.string().trim().min(1).max(1000) })).mutation(({ input }) => db.addRecoverySupportMessage(input.requestId, "owner", input.body.trim())), closeRecovery: ownerOnly.input(z.object({ requestId: z.number().int().positive() })).mutation(({ input }) => db.closeRecoverySupportRequest(input.requestId)), verifyUser: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.verifyUser(input.userId, input.value)), setBadge: ownerOnly.input(z.object({ userId: z.number(), badgeType: z.enum(["none", "blue", "black"]) })).mutation(({ input }: { input: { userId: number; badgeType: "none" | "blue" | "black" } }) => db.setUserBadge(input.userId, input.badgeType)),     setCreator: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.setUserCreator(input.userId, input.value)),
     setBadgeLabel: ownerOnly.input(z.object({ userId: z.number(), label: z.string().min(1).max(32) })).mutation(({ input }) => db.setBadgeLabel(input.userId, input.label)),
     setShowBadge: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }) => db.setShowBadge(input.userId, input.value)), setDisplayedFollowers: ownerOnly.input(z.object({ userId: z.number(), count: z.number().int().min(0).nullable() })).mutation(({ input }: { input: { userId: number; count: number | null } }) => db.setDisplayedFollowersCount(input.userId, input.count)), reviewBadge: ownerOnly.input(z.object({ applicationId: z.number(), status: z.enum(["approved", "rejected"]) })).mutation(({ ctx, input }) => db.reviewBadgeApplication(input.applicationId, ctx.user.id, input.status)), banUser: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.banUser(input.userId, input.value)), setRole: ownerOnly.input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) })).mutation(({ input }: { input: { userId: number; role: "user" | "admin" } }) => db.setUserRole(input.userId, input.role)), deletePost: protectedProcedure.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => { const result = await db.deletePostAsUser(input.postId, ctx.user.id, ctx.user.role === "admin" || isTanryugramOwner(ctx.user)); if (result.reason === "forbidden") throw new TRPCError({ code: "FORBIDDEN", message: "You can only delete your own posts" }); if (result.reason === "not_found") throw new TRPCError({ code: "NOT_FOUND", message: "Post not found" }); return result; }) }),
 });

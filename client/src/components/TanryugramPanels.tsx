@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { initialsAvatar, mediaSource } from "@/lib/mediaUrl";
 import { SafeImage } from "@/components/SafeImage";
 import { toast } from "sonner";
+import { Link } from "wouter";
 import { ShieldCheck, Sparkles, UserCheck, UserX, Trash2, Lock, Camera, Check, ArrowRight, Bug, X, Plus, Mail } from "lucide-react";
 import { BugReportModal } from "@/components/TanryugramBetaPolish";
 
@@ -21,6 +22,9 @@ export function LoginPanel({ onLogin }: { onLogin: () => void }) {
           <p className="mt-2 text-sm text-muted-foreground">A creator-first social space for independent work, stories, conversations, and community.</p>
           <div className="mt-8 space-y-4">
             <EmailAuthForm onLoginSuccess={() => window.location.reload()} />
+            <Link href="/recover" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-violet-300/60 bg-violet-500/10 py-3 text-xs font-semibold text-violet-700 transition hover:bg-violet-500/15 dark:text-violet-300">
+              Forgot your password? Open Recovery Bot
+            </Link>
             <button onClick={() => setShowOnboarding(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-muted py-3 text-xs font-semibold transition hover:bg-muted/80">
               View Welcome Onboarding
             </button>
@@ -53,6 +57,11 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const setUploadPolicyMutation = trpc.admin.setUploadPolicy.useMutation();
   const emailSettingsQuery = trpc.admin.emailSettings.useQuery();
   const setEmailSettingsMutation = trpc.admin.setEmailSettings.useMutation();
+  const recoverySettingsQuery = trpc.admin.recoverySettings.useQuery();
+  const setRecoverySettingsMutation = trpc.admin.setRecoverySettings.useMutation();
+  const recoveryInboxQuery = trpc.admin.recoveryInbox.useQuery();
+  const replyRecoveryMutation = trpc.admin.replyRecovery.useMutation();
+  const closeRecoveryMutation = trpc.admin.closeRecovery.useMutation();
   const utils = trpc.useUtils();
 
   const [instagramConnected, setInstagramConnected] = useState(false);
@@ -66,8 +75,12 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const applications = applicationsQuery.data || [];
   const uploadPolicy = uploadPolicyQuery.data || { photosEnabled: true, videosEnabled: false };
   const emailSettings = emailSettingsQuery.data || { emailDeliveryEnabled: true, signupVerificationEnabled: false };
+  const recoverySettings = recoverySettingsQuery.data || { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
+  const [whatsappNumber, setWhatsappNumber] = useState(recoverySettings.whatsappSupportNumber);
+  const [recoveryReplies, setRecoveryReplies] = useState<Record<number, string>>({});
   const updateUploadPolicy = (next: { photosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy) => { utils.admin.uploadPolicy.setData(undefined, policy); utils.media.policy.setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error) => toast.error(error.message) });
   const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.emailSettings.setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error) => toast.error(error.message) });
+  const updateRecoverySettings = (next: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) => setRecoverySettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.recoverySettings.setData(undefined, settings); setWhatsappNumber(settings.whatsappSupportNumber); utils.recovery.settings.invalidate(); toast.success("Recovery support settings updated"); }, onError: (error) => toast.error(error.message) });
 
   const handleInstagramConnect = () => {
     if (!instagramUser.trim()) {
@@ -154,6 +167,23 @@ export function AdminView({ onTip }: { onTip: () => void }) {
           </button>
         </div>
         {!emailSettings.emailDeliveryEnabled && emailSettings.signupVerificationEnabled && <p className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">Signup verification is paused because email delivery is off. Turn email delivery on before enabling verification.</p>}
+      </div>
+
+      <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500">Recovery desk</p>
+            <h3 className="mt-1 font-semibold">Guest recovery & WhatsApp support</h3>
+            <p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted-foreground">Let locked-out users create a temporary guest ID that can message only this owner. You can also publish a WhatsApp recovery link and change its number. Never ask for or display a user’s current password.</p>
+          </div>
+          <span className="w-fit rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">Owner only</span>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <button type="button" onClick={() => updateRecoverySettings({ guestRecoveryEnabled: !recoverySettings.guestRecoveryEnabled, whatsappSupportEnabled: recoverySettings.whatsappSupportEnabled, whatsappSupportNumber: whatsappNumber })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${recoverySettings.guestRecoveryEnabled ? "border-violet-300 bg-violet-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Guest recovery ID</span><span className="mt-1 block text-[11px] text-muted-foreground">Temporary owner-only support thread, expires in 24 hours.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${recoverySettings.guestRecoveryEnabled ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground"}`}>{recoverySettings.guestRecoveryEnabled ? "ON" : "OFF"}</span></button>
+          <button type="button" onClick={() => updateRecoverySettings({ guestRecoveryEnabled: recoverySettings.guestRecoveryEnabled, whatsappSupportEnabled: !recoverySettings.whatsappSupportEnabled, whatsappSupportNumber: whatsappNumber })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${recoverySettings.whatsappSupportEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">WhatsApp support link</span><span className="mt-1 block text-[11px] text-muted-foreground">Show a direct recovery link on the official portal.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${recoverySettings.whatsappSupportEnabled ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"}`}>{recoverySettings.whatsappSupportEnabled ? "ON" : "OFF"}</span></button>
+        </div>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row"><input value={whatsappNumber} onChange={(event) => setWhatsappNumber(event.target.value)} placeholder="+8801404841981" className="h-11 flex-1 rounded-2xl border border-border bg-background px-4 text-sm outline-none focus:border-violet-500" /><button onClick={() => updateRecoverySettings({ guestRecoveryEnabled: recoverySettings.guestRecoveryEnabled, whatsappSupportEnabled: recoverySettings.whatsappSupportEnabled, whatsappSupportNumber: whatsappNumber })} className="min-h-11 rounded-2xl bg-foreground px-4 text-xs font-semibold text-background">Save WhatsApp number</button></div>
+        <div className="mt-5 space-y-3"><div className="flex items-center justify-between"><h4 className="text-sm font-semibold">Owner recovery inbox</h4><span className="text-[11px] text-muted-foreground">{recoveryInboxQuery.data?.length ?? 0} requests</span></div>{recoveryInboxQuery.data?.length ? recoveryInboxQuery.data.map((request) => <div key={request.id} className="rounded-2xl border border-border bg-muted/30 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-sm font-semibold">{request.guestLabel || "Guest recovery request"}</p><p className="text-[11px] text-muted-foreground">{request.accountEmail || "Email not provided"} · {request.status}</p></div><button onClick={() => closeRecoveryMutation.mutate({ requestId: request.id }, { onSuccess: () => { utils.admin.recoveryInbox.invalidate(); toast.success("Recovery request closed"); }, onError: (error) => toast.error(error.message) })} className="rounded-xl border border-border px-3 py-1.5 text-[10px] font-semibold">Close</button></div><div className="mt-3 space-y-2">{request.messages.map((message) => <div key={message.id} className={`rounded-xl p-3 text-xs ${message.senderType === "owner" ? "bg-violet-600 text-white" : "bg-card"}`}><p>{message.body}</p><p className="mt-1 text-[10px] opacity-60">{message.senderType === "owner" ? "You" : "Guest"} · {new Date(message.createdAt).toLocaleString()}</p></div>)}</div><div className="mt-3 flex gap-2"><input value={recoveryReplies[request.id] ?? ""} onChange={(event) => setRecoveryReplies((current) => ({ ...current, [request.id]: event.target.value }))} placeholder="Reply without asking for a password" className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-xs outline-none focus:border-violet-500" /><button onClick={() => { const body = (recoveryReplies[request.id] ?? "").trim(); if (!body) return; replyRecoveryMutation.mutate({ requestId: request.id, body }, { onSuccess: () => { setRecoveryReplies((current) => ({ ...current, [request.id]: "" })); utils.admin.recoveryInbox.invalidate(); toast.success("Reply sent"); }, onError: (error) => toast.error(error.message) }); }} className="rounded-xl bg-violet-600 px-3 text-xs font-semibold text-white">Reply</button></div></div>) : <p className="rounded-2xl bg-muted/40 p-4 text-xs text-muted-foreground">No active guest recovery requests.</p>}</div>
       </div>
 
       <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm space-y-6">

@@ -453,3 +453,12 @@
 - [x] Brevo send regression: capture a redacted provider error and make the actual verification-email failure diagnosable without exposing secrets or codes
 - [x] Owner settings: add persistent owner-only controls for email delivery enabled/disabled and signup verification required/optional
 - [x] Signup flow: honor owner verification settings while keeping password storage one-way and preventing admin password visibility
+
+- [x] Guest recovery: add a limited guest identity that can submit a password-recovery support request only to the owner
+- [x] WhatsApp support: add an optional owner-configurable WhatsApp contact number and deep link
+- [x] Admin controls: add owner-only toggles and editable support settings for guest recovery and WhatsApp contact
+- [x] Security: ensure recovery support never reveals existing passwords and uses rate limits/time-limited requests
+
+- [x] Official recovery portal: add a TanRyuGram-controlled recovery page and bot-style guidance for secure password resets
+- [x] Recovery safety copy: warn users never to share private email addresses, passwords, verification codes, or reset links
+- [x] Recovery integration: connect the official portal to the existing email reset and guest owner-support settings without exposing passwords
