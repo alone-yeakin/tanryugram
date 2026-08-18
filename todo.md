@@ -495,3 +495,12 @@
 - [x] Group invites: let normal members submit invite requests instead of directly adding people
 - [x] Group invites: add an inbox for authorized admins/moderators to approve or reject pending requests
 - [x] Group invites: enforce role and membership rules server-side with regression tests
+
+- [x] Creator Studio: add an owner-only user export action that creates a validated portable migration package
+- [x] User migration: preserve migration-safe profile/account settings while excluding passwords, sessions, verification codes, private secrets, payment identifiers, and transient signaling data
+- [x] Creator Studio: add an owner-only import action with schema validation, pre-import summary, duplicate handling, and password-reset reactivation controls
+- [x] User migration: add owner-only access, size/schema validation, focused tests, documentation, and publish the feature; archive files must be stored privately by the owner
+
+- [x] Full migration scope: include portable profiles, media references, posts, comments, likes/reactions, follows, saves, stories, direct messages, group memberships/messages, badges, subscriptions, settings, and timestamps—not only user IDs
+- [x] Security boundary: exclude passwords, session cookies, reset codes, push tokens, payment identifiers, API tokens, and server secrets; reactivate imported accounts through secure credential reset
+- [x] Archive design: version and validate the archive, preserve stable record IDs for cross-table relationships, and document private handling; application-level encryption remains a future hardening option

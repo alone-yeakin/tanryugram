@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { initialsAvatar, mediaSource } from "@/lib/mediaUrl";
 import { SafeImage } from "@/components/SafeImage";
 import { toast } from "sonner";
 import { Link } from "wouter";
-import { ShieldCheck, Sparkles, UserCheck, UserX, Trash2, Lock, Camera, Check, ArrowRight, Bug, X, Plus, Mail } from "lucide-react";
+import { ShieldCheck, Sparkles, UserCheck, UserX, Trash2, Lock, Camera, Check, ArrowRight, Bug, X, Plus, Mail, Download, Upload, Archive } from "lucide-react";
 import { BugReportModal } from "@/components/TanryugramBetaPolish";
 
 import { OnboardingScreen, EmailAuthForm } from "@/components/TanryugramBetaPolish";
@@ -62,6 +62,10 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const recoveryInboxQuery = trpc.admin.recoveryInbox.useQuery();
   const replyRecoveryMutation = trpc.admin.replyRecovery.useMutation();
   const closeRecoveryMutation = trpc.admin.closeRecovery.useMutation();
+  const migrationExportMutation = trpc.admin.migrationExport.useMutation();
+  const migrationInspectMutation = trpc.admin.migrationInspect.useMutation();
+  const migrationImportMutation = trpc.admin.migrationImport.useMutation();
+  const migrationFileInput = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
   const [instagramConnected, setInstagramConnected] = useState(false);
@@ -79,9 +83,30 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const [whatsappNumber, setWhatsappNumber] = useState(recoverySettings.whatsappSupportNumber);
   const [recoveryReplies, setRecoveryReplies] = useState<Record<number, string>>({});
   const [betaPreviewCounts, setBetaPreviewCounts] = useState<Record<number, number>>({});
+  const [migrationJson, setMigrationJson] = useState("");
+  const [migrationSummary, setMigrationSummary] = useState<any | null>(null);
   const updateUploadPolicy = (next: { photosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy) => { utils.admin.uploadPolicy.setData(undefined, policy); utils.media.policy.setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error) => toast.error(error.message) });
   const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.emailSettings.setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error) => toast.error(error.message) });
   const updateRecoverySettings = (next: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) => setRecoverySettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.recoverySettings.setData(undefined, settings); setWhatsappNumber(settings.whatsappSupportNumber); utils.recovery.settings.invalidate(); toast.success("Recovery support settings updated"); }, onError: (error) => toast.error(error.message) });
+
+  const downloadMigrationArchive = async () => {
+    try {
+      const archive = await migrationExportMutation.mutateAsync();
+      const blob = new Blob([JSON.stringify(archive, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `tanryugram-user-migration-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url);
+      toast.success("Full migration archive downloaded", { description: "Store this file privately. It includes account history but never passwords or session secrets." });
+    } catch (error: any) { toast.error(error.message || "Could not export migration archive"); }
+  };
+  const inspectMigrationFile = async (file: File) => {
+    if (file.size > 45 * 1024 * 1024) { toast.error("Migration archive is larger than 45 MB"); return; }
+    const text = await file.text(); setMigrationJson(text);
+    try { const summary = await migrationInspectMutation.mutateAsync({ archiveJson: text }); setMigrationSummary(summary); toast.success("Migration archive validated", { description: `${summary.users} users, ${summary.messages} direct messages, and ${summary.groupMessages} group messages found.` }); } catch (error: any) { setMigrationSummary(null); toast.error(error.message || "Invalid migration archive"); }
+  };
+  const importMigrationArchive = () => {
+    if (!migrationJson || !migrationSummary) return toast.error("Choose and validate a migration archive first");
+    if (!window.confirm(`Import ${migrationSummary.users} users and their full history? This is intended for a fresh destination and cannot be undone.`)) return;
+    migrationImportMutation.mutate({ archiveJson: migrationJson, confirm: true }, { onSuccess: (result) => toast.success("Migration archive imported", { description: `${result.users} accounts require password reset before sign-in.` }), onError: (error) => toast.error(error.message) });
+  };
 
   const handleInstagramConnect = () => {
     if (!instagramUser.trim()) {
@@ -221,6 +246,23 @@ export function AdminView({ onTip }: { onTip: () => void }) {
         </div>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row"><input value={whatsappNumber} onChange={(event) => setWhatsappNumber(event.target.value)} placeholder="+8801404841981" className="h-11 flex-1 rounded-2xl border border-border bg-background px-4 text-sm outline-none focus:border-violet-500" /><button onClick={() => updateRecoverySettings({ guestRecoveryEnabled: recoverySettings.guestRecoveryEnabled, whatsappSupportEnabled: recoverySettings.whatsappSupportEnabled, whatsappSupportNumber: whatsappNumber })} className="min-h-11 rounded-2xl bg-foreground px-4 text-xs font-semibold text-background">Save WhatsApp number</button></div>
         <div className="mt-5 space-y-3"><div className="flex items-center justify-between"><h4 className="text-sm font-semibold">Owner recovery inbox</h4><span className="text-[11px] text-muted-foreground">{recoveryInboxQuery.data?.length ?? 0} requests</span></div>{recoveryInboxQuery.data?.length ? recoveryInboxQuery.data.map((request) => <div key={request.id} className="rounded-2xl border border-border bg-muted/30 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-sm font-semibold">{request.guestLabel || "Guest recovery request"}</p><p className="text-[11px] text-muted-foreground">{request.accountEmail || "Email not provided"} · {request.status}</p></div><button onClick={() => closeRecoveryMutation.mutate({ requestId: request.id }, { onSuccess: () => { utils.admin.recoveryInbox.invalidate(); toast.success("Recovery request closed"); }, onError: (error) => toast.error(error.message) })} className="rounded-xl border border-border px-3 py-1.5 text-[10px] font-semibold">Close</button></div><div className="mt-3 space-y-2">{request.messages.map((message) => <div key={message.id} className={`rounded-xl p-3 text-xs ${message.senderType === "owner" ? "bg-violet-600 text-white" : "bg-card"}`}><p>{message.body}</p><p className="mt-1 text-[10px] opacity-60">{message.senderType === "owner" ? "You" : "Guest"} · {new Date(message.createdAt).toLocaleString()}</p></div>)}</div><div className="mt-3 flex gap-2"><input value={recoveryReplies[request.id] ?? ""} onChange={(event) => setRecoveryReplies((current) => ({ ...current, [request.id]: event.target.value }))} placeholder="Reply without asking for a password" className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-xs outline-none focus:border-violet-500" /><button onClick={() => { const body = (recoveryReplies[request.id] ?? "").trim(); if (!body) return; replyRecoveryMutation.mutate({ requestId: request.id, body }, { onSuccess: () => { setRecoveryReplies((current) => ({ ...current, [request.id]: "" })); utils.admin.recoveryInbox.invalidate(); toast.success("Reply sent"); }, onError: (error) => toast.error(error.message) }); }} className="rounded-xl bg-violet-600 px-3 text-xs font-semibold text-white">Reply</button></div></div>) : <p className="rounded-2xl bg-muted/40 p-4 text-xs text-muted-foreground">No active guest recovery requests.</p>}</div>
+      </div>
+
+      <div className="rounded-[28px] border border-amber-300/70 bg-amber-500/5 p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600">Portability & continuity</p>
+            <h3 className="mt-1 flex items-center gap-2 font-semibold"><Archive className="h-4 w-4 text-amber-600" /> Full user migration archive</h3>
+            <p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted-foreground">Export the complete portable history—not just IDs—including profiles, posts, media references, comments, reactions, follows, messages, groups, memberships, settings, badges, and timestamps. Passwords, sessions, reset codes, push tokens, payment identifiers, and server secrets are never included.</p>
+          </div>
+          <span className="w-fit rounded-full bg-amber-500/15 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Owner only</span>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <button type="button" onClick={downloadMigrationArchive} disabled={migrationExportMutation.isPending} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-foreground px-4 py-3 text-xs font-semibold text-background transition hover:opacity-90 disabled:opacity-50"><Download className="h-4 w-4" />{migrationExportMutation.isPending ? "Preparing archive…" : "Export all user history"}</button>
+          <button type="button" onClick={() => migrationFileInput.current?.click()} disabled={migrationInspectMutation.isPending} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-xs font-semibold transition hover:bg-muted disabled:opacity-50"><Upload className="h-4 w-4" />Choose archive to import</button>
+          <input ref={migrationFileInput} type="file" accept="application/json,.json" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void inspectMigrationFile(file); event.currentTarget.value = ""; }} />
+        </div>
+        {migrationSummary && <div className="mt-4 rounded-2xl border border-emerald-300/70 bg-emerald-500/10 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Archive validated</p><p className="mt-1 text-[11px] text-muted-foreground">{migrationSummary.users} users · {migrationSummary.posts} posts · {migrationSummary.messages} direct messages · {migrationSummary.groupMessages} group messages · {migrationSummary.groups} groups · {(migrationSummary.bytes / 1024 / 1024).toFixed(2)} MB</p></div><button type="button" onClick={importMigrationArchive} disabled={migrationImportMutation.isPending} className="min-h-11 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{migrationImportMutation.isPending ? "Importing…" : "Import & reactivate history"}</button></div><p className="mt-3 text-[11px] leading-5 text-emerald-800/80 dark:text-emerald-200/80">Import is intentionally protected against duplicate identities and is designed for a fresh destination. Imported users keep their history but must complete a password reset before signing in.</p></div>}
       </div>
 
       <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm space-y-6">
