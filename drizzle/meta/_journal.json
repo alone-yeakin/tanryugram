@@ -183,6 +183,20 @@
       "when": 1787030228074,
       "tag": "0025_rare_colonel_america",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1787072583876,
+      "tag": "0026_omniscient_mac_gargan",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1787072728648,
+      "tag": "0027_breezy_king_bedlam",
+      "breakpoints": true
     }
   ]
 }

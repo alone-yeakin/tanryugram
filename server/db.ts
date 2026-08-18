@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { eq, and, or, like, desc, sql, inArray } from "drizzle-orm";
 import { canDeletePost, isTanryugramOwner } from "./authorization";
 import { resolveDisplayedFollowerCount } from "./followerStats";
-import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, emailDeliverySettings, recoverySupportSettings, recoverySupportRequests, recoverySupportMessages, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
+import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, emailDeliverySettings, recoverySupportSettings, recoverySupportRequests, groupInviteRequests, recoverySupportMessages, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
@@ -281,18 +281,18 @@ export async function getUserPushTokens(userId: number) {
 
 export async function getConversationSettings(userId: number, peerId: number) {
   const db = await getDb();
-  if (!db) return { userId, peerId, isPinned: false, isArchived: false, isMuted: false, themeColor: null };
-  return (await db.select().from(conversationSettings).where(and(eq(conversationSettings.userId, userId), eq(conversationSettings.peerId, peerId))).limit(1))[0] ?? { userId, peerId, isPinned: false, isArchived: false, isMuted: false, themeColor: null };
+  if (!db) return { userId, peerId, isPinned: false, isArchived: false, isMuted: false, themeColor: null, nickname: null };
+  return (await db.select().from(conversationSettings).where(and(eq(conversationSettings.userId, userId), eq(conversationSettings.peerId, peerId))).limit(1))[0] ?? { userId, peerId, isPinned: false, isArchived: false, isMuted: false, themeColor: null, nickname: null };
 }
 
-export async function updateConversationSettings(userId: number, peerId: number, settings: { isPinned?: boolean; isArchived?: boolean; isMuted?: boolean; themeColor?: string }) {
+export async function updateConversationSettings(userId: number, peerId: number, settings: { isPinned?: boolean; isArchived?: boolean; isMuted?: boolean; themeColor?: string; nickname?: string | null }) {
   const db = await getDb();
   if (!db) return;
   const existing = (await db.select().from(conversationSettings).where(and(eq(conversationSettings.userId, userId), eq(conversationSettings.peerId, peerId))).limit(1))[0];
   if (existing) {
-    await db.update(conversationSettings).set(settings).where(eq(conversationSettings.id, existing.id));
+    await db.update(conversationSettings).set({ ...settings, nickname: settings.nickname === undefined ? undefined : (settings.nickname?.trim() || null) }).where(eq(conversationSettings.id, existing.id));
   } else {
-    await db.insert(conversationSettings).values({ userId, peerId, ...settings });
+    await db.insert(conversationSettings).values({ userId, peerId, ...settings, nickname: settings.nickname?.trim() || null });
   }
 }
 
@@ -379,11 +379,50 @@ export async function addGroupMember(groupId: number, actorId: number, userId: n
   const db = await getDb();
   if (!db) return;
   const actor = (await db.select().from(groupMembers).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, actorId))).limit(1))[0];
-  if (actor?.role !== "admin") throw new Error("Only group admins can add members");
+  if (!actor || !["admin", "moderator"].includes(actor.role)) throw new Error("Only group admins and moderators can add members directly");
   const target = await getUserById(userId);
   if (!target) throw new Error("User not found");
   const existing = (await db.select().from(groupMembers).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId))).limit(1))[0];
-  if (!existing) await db.insert(groupMembers).values({ groupId, userId, role: "member" });
+  if (!existing) {
+    await db.insert(groupMembers).values({ groupId, userId, role: "member" });
+    await addGroupSystemMessage(groupId, actorId, `${target.name || target.username || "A member"} was added to the group`);
+    await auditGroup(groupId, actorId, "member_added", String(userId));
+  }
+}
+export async function requestGroupInvite(groupId: number, inviterId: number, inviteeId: number) {
+  const db = await getDb();
+  if (!db) return { status: "unavailable" } as const;
+  await assertGroupMember(groupId, inviterId);
+  const target = await getUserById(inviteeId);
+  if (!target) throw new Error("User not found");
+  const existingMember = (await db.select().from(groupMembers).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, inviteeId))).limit(1))[0];
+  if (existingMember) return { status: "member" } as const;
+  const existing = (await db.select().from(groupInviteRequests).where(and(eq(groupInviteRequests.groupId, groupId), eq(groupInviteRequests.inviterId, inviterId), eq(groupInviteRequests.inviteeId, inviteeId), eq(groupInviteRequests.status, "pending"))).limit(1))[0];
+  if (existing) return { status: "pending" } as const;
+  await db.insert(groupInviteRequests).values({ groupId, inviterId, inviteeId });
+  await auditGroup(groupId, inviterId, "member_invite_requested", String(inviteeId));
+  return { status: "requested" } as const;
+}
+export async function getGroupInviteRequests(groupId: number, actorId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  await requireGroupRole(groupId, actorId, ["admin", "moderator"]);
+  const rows = await db.select({ request: groupInviteRequests, inviter: users }).from(groupInviteRequests).innerJoin(users, eq(groupInviteRequests.inviterId, users.id)).where(and(eq(groupInviteRequests.groupId, groupId), eq(groupInviteRequests.status, "pending"))).orderBy(groupInviteRequests.createdAt);
+  return Promise.all(rows.map(async (row) => ({ ...row, invitee: await getUserById(row.request.inviteeId) })));
+}
+export async function reviewGroupInviteRequest(requestId: number, actorId: number, approved: boolean) {
+  const db = await getDb();
+  if (!db) return;
+  const request = (await db.select().from(groupInviteRequests).where(eq(groupInviteRequests.id, requestId)).limit(1))[0];
+  if (!request) throw new Error("Invite request not found");
+  await requireGroupRole(request.groupId, actorId, ["admin", "moderator"]);
+  await db.update(groupInviteRequests).set({ status: approved ? "approved" : "rejected", reviewedAt: new Date(), reviewedBy: actorId }).where(eq(groupInviteRequests.id, requestId));
+  if (approved) {
+    const existing = (await db.select().from(groupMembers).where(and(eq(groupMembers.groupId, request.groupId), eq(groupMembers.userId, request.inviteeId))).limit(1))[0];
+    if (!existing) await db.insert(groupMembers).values({ groupId: request.groupId, userId: request.inviteeId, role: "member" });
+    await addGroupSystemMessage(request.groupId, actorId, `${(await getUserById(request.inviteeId))?.name || "A member"} joined the group`);
+  }
+  await auditGroup(request.groupId, actorId, approved ? "member_invite_approved" : "member_invite_rejected", String(request.inviteeId));
 }
 export async function removeGroupMember(groupId: number, actorId: number, userId: number) {
   const db = await getDb();

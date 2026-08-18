@@ -166,6 +166,17 @@ export const groupJoinRequests = mysqlTable("groupJoinRequests", {
   reviewedAt: timestamp("reviewedAt"),
 });
 
+export const groupInviteRequests = mysqlTable("groupInviteRequests", {
+  id: int("id").autoincrement().primaryKey(),
+  groupId: int("groupId").notNull(),
+  inviterId: int("inviterId").notNull(),
+  inviteeId: int("inviteeId").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewedBy: int("reviewedBy"),
+});
+
 export const groupPolls = mysqlTable("groupPolls", {
   id: int("id").autoincrement().primaryKey(),
   groupId: int("groupId").notNull(),
@@ -380,6 +391,7 @@ export const conversationSettings = mysqlTable("conversationSettings", {
   isArchived: boolean("isArchived").default(false).notNull(),
   isMuted: boolean("isMuted").default(false).notNull(),
   themeColor: varchar("themeColor", { length: 32 }).default("#8b5cf6").notNull(),
+  nickname: varchar("nickname", { length: 80 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

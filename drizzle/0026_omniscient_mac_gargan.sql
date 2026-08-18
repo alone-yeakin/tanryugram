@@ -1,0 +1,1 @@
+ALTER TABLE `conversationSettings` ADD `nickname` varchar(80);

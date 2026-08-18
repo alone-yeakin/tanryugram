@@ -485,3 +485,13 @@
 - [x] Mail configuration: allow secure owner-managed Apps Script endpoint/secret replacement without exposing credentials in ordinary admin UI
 - [x] No-CAPTCHA safety: enforce cooldowns, per-address and global limits, single-use expiry, and redacted delivery logs
 - [x] Documentation: add safe Apps Script deployment and replacement instructions
+
+- [x] Messenger regression: refresh group logo/avatar in the home conversation list after group updates without changing existing media rendering paths
+- [x] Personal accounts: add user-managed nicknames with persistent, privacy-safe storage and chat-list rendering
+- [x] Messaging polish: add a small set of low-risk usability improvements that preserve current media behavior
+- [x] Validation: focused Messenger contract tests (11 passing), TypeScript, production build, and desktop preview passed; the full suite has 72 passing tests plus the pre-existing Brevo IP-allowlist failure
+
+- [x] Group invites: allow admins and moderators to directly add members
+- [x] Group invites: let normal members submit invite requests instead of directly adding people
+- [x] Group invites: add an inbox for authorized admins/moderators to approve or reject pending requests
+- [x] Group invites: enforce role and membership rules server-side with regression tests

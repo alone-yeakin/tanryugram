@@ -22,11 +22,15 @@ describe("Tanryugram major feature contracts", () => {
   });
 
   it("exposes member-aware group creation and group conversation procedures", () => {
-    expectProcedures(caller.messages, ["createGroup", "groups", "groupMembers", "groupMessages", "sendGroupMessage"]);
+    expectProcedures(caller.messages, ["createGroup", "groups", "groupMembers", "groupMessages", "sendGroupMessage", "addGroupMember", "requestGroupInvite", "inviteRequests", "reviewInviteRequest"]);
   });
 
   it("exposes group discovery, moderation, polls, events, and shared-media procedures", () => {
     expectProcedures(caller.messages, ["discoverGroups", "updateGroupProfile", "joinGroup", "joinRequests", "reviewJoinRequest", "setGroupMemberRole", "pinGroupMessage", "deleteGroupMessage", "createPoll", "poll", "votePoll", "createEvent", "events", "rsvpEvent", "groupMedia", "uploadGroupAttachment"]);
+  });
+
+  it("exposes the separate member-invite approval workflow", () => {
+    expectProcedures(caller.messages, ["addGroupMember", "requestGroupInvite", "inviteRequests", "reviewInviteRequest"]);
   });
 
   it("preserves all RSVP states required for event attendee summaries", () => {
