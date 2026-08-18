@@ -514,3 +514,8 @@
 - [x] Gemini security: keep the API key server-side and restrict all generation/proposal procedures to the configured owner
 - [x] Gemini workflow: show proposed changes and impact before any code or configuration change can be applied
 - [x] Gemini validation: add usage guidance, regression tests, and preserve the existing photo/media system
+
+- [x] Gemini chat: expand Creator Studio from one-shot proposals into an owner-only conversational panel
+- [x] Gemini chat security: bound conversation history, keep platform context safe, and preserve owner authorization
+- [x] Gemini chat UX: add message history, clear chat, loading/error states, and confirmation-gated safe actions
+- [x] Gemini chat validation: add tests, verify the panel, and publish without changing the photo/media system

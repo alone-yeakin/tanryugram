@@ -49,6 +49,27 @@ export async function generateGeminiFeatureProposal(request: string, currentSett
   return proposalSchema.parse(extractJson(text));
 }
 
+const chatMessageSchema = z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(4000) });
+
+export async function generateGeminiChatReply(messages: Array<{ role: "user" | "assistant"; content: string }>, currentSettings: Record<string, unknown>) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Gemini API key is not configured");
+  const boundedMessages = messages.slice(-18).map((message) => chatMessageSchema.parse(message));
+  const contents = boundedMessages.map((message) => ({ role: message.role === "assistant" ? "model" : "user", parts: [{ text: message.content }] }));
+  const systemInstruction = `You are the private owner-only Gemini assistant inside TanRyuGram Creator Studio. Help the owner understand the platform, plan features, troubleshoot, and use existing safe controls. Current safe settings: ${JSON.stringify(currentSettings)}. Be clear about what is only a proposal versus what was actually changed. Never claim to edit or deploy source code. Never reveal API keys, passwords, private messages, user exports, session data, or hidden security settings. Never recommend changing the working photo/media rendering or storage system without a reviewed engineering change. If the owner asks to apply an existing safe setting, explain that the separate confirmation control must be used. Keep replies concise, practical, and honest.`;
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: systemInstruction }] }, contents, generationConfig: { temperature: 0.35, maxOutputTokens: 1200 } }),
+  });
+  const body = await response.text();
+  if (!response.ok) throw new Error(`Gemini chat request failed (${response.status})`);
+  const payload = JSON.parse(body) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+  const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
+  if (!text) throw new Error("Gemini returned an empty chat response");
+  return text;
+}
+
 export function applySafeGeminiActions(actions: GeminiFeatureProposal["safeActions"], current: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean; photosEnabled: boolean; videosEnabled: boolean }) {
   const next = { ...current };
   for (const action of actions) {

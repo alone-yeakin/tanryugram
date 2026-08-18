@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 import { ShieldCheck, Sparkles, UserCheck, UserX, Trash2, Lock, Camera, Check, ArrowRight, Bug, X, Plus, Mail, Download, Upload, Archive } from "lucide-react";
 import { BugReportModal } from "@/components/TanryugramBetaPolish";
+import { AIChatBox, type Message as GeminiChatMessage } from "@/components/AIChatBox";
 
 import { OnboardingScreen, EmailAuthForm } from "@/components/TanryugramBetaPolish";
 
@@ -68,6 +69,7 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const migrationFileInput = useRef<HTMLInputElement>(null);
   const geminiProposalMutation = trpc.admin.geminiProposal.useMutation();
   const geminiApplyMutation = trpc.admin.geminiApplySafeActions.useMutation();
+  const geminiChatMutation = trpc.admin.geminiChat.useMutation();
   const utils = trpc.useUtils();
 
   const [instagramConnected, setInstagramConnected] = useState(false);
@@ -89,6 +91,7 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const [migrationSummary, setMigrationSummary] = useState<any | null>(null);
   const [geminiRequest, setGeminiRequest] = useState("");
   const [geminiProposal, setGeminiProposal] = useState<any | null>(null);
+  const [geminiChatMessages, setGeminiChatMessages] = useState<GeminiChatMessage[]>([{ role: "assistant", content: "I’m your private TanRyuGram Creator Studio assistant. Ask me about features, settings, troubleshooting, or a safe implementation plan. I will explain what needs review and will never claim that source code was changed unless it actually was." }]);
   const updateUploadPolicy = (next: { photosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy) => { utils.admin.uploadPolicy.setData(undefined, policy); utils.media.policy.setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error) => toast.error(error.message) });
   const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.emailSettings.setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error) => toast.error(error.message) });
   const updateRecoverySettings = (next: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) => setRecoverySettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.recoverySettings.setData(undefined, settings); setWhatsappNumber(settings.whatsappSupportNumber); utils.recovery.settings.invalidate(); toast.success("Recovery support settings updated"); }, onError: (error) => toast.error(error.message) });
@@ -111,6 +114,14 @@ export function AdminView({ onTip }: { onTip: () => void }) {
     if (!window.confirm(`Import ${migrationSummary.users} users and their full history? This is intended for a fresh destination and cannot be undone.`)) return;
     migrationImportMutation.mutate({ archiveJson: migrationJson, confirm: true }, { onSuccess: (result) => toast.success("Migration archive imported", { description: `${result.users} accounts require password reset before sign-in.` }), onError: (error) => toast.error(error.message) });
   };
+
+  const sendGeminiChatMessage = (content: string) => {
+    const nextMessages = [...geminiChatMessages, { role: "user" as const, content }];
+    setGeminiChatMessages(nextMessages);
+    const chatMessages = nextMessages.filter((message) => message.role !== "system").slice(-18).map(({ role, content: text }) => ({ role: role === "assistant" ? "assistant" as const : "user" as const, content: text }));
+    geminiChatMutation.mutate({ messages: chatMessages }, { onSuccess: ({ reply }) => setGeminiChatMessages((current) => [...current, { role: "assistant", content: reply }]), onError: (error) => { setGeminiChatMessages((current) => [...current, { role: "assistant", content: `I could not reach Gemini right now. ${error.message}` }]); } });
+  };
+  const clearGeminiChat = () => setGeminiChatMessages([{ role: "assistant", content: "Chat cleared. What would you like to plan or troubleshoot in TanRyuGram?" }]);
 
   const requestGeminiProposal = () => {
     const request = geminiRequest.trim();
@@ -272,6 +283,7 @@ export function AdminView({ onTip }: { onTip: () => void }) {
           </div>
           <span className="w-fit rounded-full bg-violet-500/15 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">Owner only</span>
         </div>
+        <div className="mt-5 rounded-2xl border border-violet-300/60 bg-background/70 p-2"><div className="flex items-center justify-between gap-2 px-2 pb-2"><p className="text-xs font-semibold">Gemini chat</p><button type="button" onClick={clearGeminiChat} className="min-h-9 rounded-xl border border-border px-3 text-[10px] font-semibold text-muted-foreground hover:text-foreground">Clear chat</button></div><AIChatBox messages={geminiChatMessages} onSendMessage={sendGeminiChatMessage} isLoading={geminiChatMutation.isPending} height={460} placeholder="Ask Gemini about TanRyuGram…" emptyStateMessage="Start a private Creator Studio conversation" suggestedPrompts={["Plan a safe new feature", "Explain the current email controls", "How should I improve the mobile app?"]} /></div>
         <div className="mt-5 flex flex-col gap-3"><textarea value={geminiRequest} onChange={(event) => setGeminiRequest(event.target.value)} placeholder="Example: turn on signup email verification and keep photo uploads enabled" className="min-h-24 w-full resize-y rounded-2xl border border-border bg-background p-4 text-sm outline-none focus:border-violet-500" /><button type="button" onClick={requestGeminiProposal} disabled={geminiProposalMutation.isPending} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"><Sparkles className="h-4 w-4" />{geminiProposalMutation.isPending ? "Asking Gemini…" : "Create proposal"}</button></div>
         {geminiProposal && <div className="mt-4 rounded-2xl border border-violet-300/70 bg-card p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold">{geminiProposal.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{geminiProposal.summary}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${geminiProposal.requiresCodeChange ? "bg-amber-500/15 text-amber-700" : "bg-emerald-500/15 text-emerald-700"}`}>{geminiProposal.requiresCodeChange ? "CODE REVIEW NEEDED" : "SAFE SETTINGS"}</span></div><div className="mt-3 space-y-1 text-[11px] text-muted-foreground">{geminiProposal.steps?.map((step: string, index: number) => <p key={`${step}-${index}`}>{index + 1}. {step}</p>)}</div>{geminiProposal.warning && <p className="mt-3 rounded-xl bg-amber-500/10 p-3 text-[11px] leading-5 text-amber-800 dark:text-amber-200">{geminiProposal.warning}</p>}{geminiProposal.safeActions?.length > 0 && <button type="button" onClick={applyGeminiProposal} disabled={geminiApplyMutation.isPending} className="mt-4 min-h-11 rounded-xl bg-foreground px-4 py-2 text-xs font-semibold text-background disabled:opacity-50">{geminiApplyMutation.isPending ? "Applying…" : "Review and apply safe settings"}</button>}</div>}
         <p className="mt-3 text-[11px] leading-5 text-violet-800/80 dark:text-violet-200/80">The Gemini key is stored server-side and never shown to users. Gemini proposals use your Google API quota and may be subject to Google’s limits. Existing photo and media rendering code is not modified by this assistant.</p>
