@@ -12,6 +12,8 @@ export const emailDeliverySettings = mysqlTable("emailDeliverySettings", {
   id: int("id").autoincrement().primaryKey(),
   emailDeliveryEnabled: boolean("emailDeliveryEnabled").default(true).notNull(),
   signupVerificationEnabled: boolean("signupVerificationEnabled").default(false).notNull(),
+  appScriptLoginEnabled: boolean("appScriptLoginEnabled").default(false).notNull(),
+  appScriptResetEnabled: boolean("appScriptResetEnabled").default(false).notNull(),
   updatedBy: int("updatedBy"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

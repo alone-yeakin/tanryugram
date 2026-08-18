@@ -471,7 +471,7 @@
 
 - [x] Brevo password-reset delivery regression: identify the provider rejection or sender authorization issue and restore reliable reset-email handling without exposing secrets or codes
 
-- [ ] Email delivery follow-up: determine why Brevo accepts API authentication but messages do not arrive, and prepare an alternative transport without breaking reset flows
+- [x] Email delivery follow-up: document the Brevo IP-allowlist dependency and prepare an Apps Script alternative without breaking reset flows; live inbox delivery remains provider-config dependent
 
 - [x] Call regression: deliver incoming calls to the Android home/lock screen through the native notification/full-screen path instead of only the in-app WebView
 - [x] Call regression: repair accepted-call microphone acquisition and provide a clear fallback/error state when the device or emulator denies audio input
@@ -480,3 +480,8 @@
 - [x] APK delivery: locate the latest verified Android APK and attach it, clearly identifying whether it includes the newest call fixes
 
 - [x] Admin beta controls: add a clearly labeled, owner-only preview-controls section isolated from genuine public like counts
+
+- [x] Email controls: add separate owner-only toggles for Apps Script login verification and password-reset codes
+- [x] Mail configuration: allow secure owner-managed Apps Script endpoint/secret replacement without exposing credentials in ordinary admin UI
+- [x] No-CAPTCHA safety: enforce cooldowns, per-address and global limits, single-use expiry, and redacted delivery logs
+- [x] Documentation: add safe Apps Script deployment and replacement instructions

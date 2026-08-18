@@ -74,13 +74,13 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const posts = postsQuery.data || [];
   const applications = applicationsQuery.data || [];
   const uploadPolicy = uploadPolicyQuery.data || { photosEnabled: true, videosEnabled: false };
-  const emailSettings = emailSettingsQuery.data || { emailDeliveryEnabled: true, signupVerificationEnabled: false };
+  const emailSettings = emailSettingsQuery.data || { emailDeliveryEnabled: true, signupVerificationEnabled: false, appScriptLoginEnabled: false, appScriptResetEnabled: false };
   const recoverySettings = recoverySettingsQuery.data || { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
   const [whatsappNumber, setWhatsappNumber] = useState(recoverySettings.whatsappSupportNumber);
   const [recoveryReplies, setRecoveryReplies] = useState<Record<number, string>>({});
   const [betaPreviewCounts, setBetaPreviewCounts] = useState<Record<number, number>>({});
   const updateUploadPolicy = (next: { photosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy) => { utils.admin.uploadPolicy.setData(undefined, policy); utils.media.policy.setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error) => toast.error(error.message) });
-  const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.emailSettings.setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error) => toast.error(error.message) });
+  const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.emailSettings.setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error) => toast.error(error.message) });
   const updateRecoverySettings = (next: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) => setRecoverySettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.recoverySettings.setData(undefined, settings); setWhatsappNumber(settings.whatsappSupportNumber); utils.recovery.settings.invalidate(); toast.success("Recovery support settings updated"); }, onError: (error) => toast.error(error.message) });
 
   const handleInstagramConnect = () => {
@@ -183,15 +183,26 @@ export function AdminView({ onTip }: { onTip: () => void }) {
           <span className="w-fit rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">Owner only</span>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={() => updateEmailSettings({ emailDeliveryEnabled: !emailSettings.emailDeliveryEnabled, signupVerificationEnabled: emailSettings.signupVerificationEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.emailDeliveryEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-rose-300 bg-rose-500/10"}`}>
+          <button type="button" onClick={() => updateEmailSettings({ emailDeliveryEnabled: !emailSettings.emailDeliveryEnabled, signupVerificationEnabled: emailSettings.signupVerificationEnabled, appScriptLoginEnabled: emailSettings.appScriptLoginEnabled, appScriptResetEnabled: emailSettings.appScriptResetEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.emailDeliveryEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-rose-300 bg-rose-500/10"}`}>
             <span><span className="block text-sm font-semibold">Email delivery</span><span className="mt-1 block text-[11px] text-muted-foreground">Brevo sends verification and password-reset messages.</span></span>
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${emailSettings.emailDeliveryEnabled ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"}`}>{emailSettings.emailDeliveryEnabled ? "ON" : "OFF"}</span>
           </button>
-          <button type="button" onClick={() => updateEmailSettings({ emailDeliveryEnabled: emailSettings.emailDeliveryEnabled, signupVerificationEnabled: !emailSettings.signupVerificationEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.signupVerificationEnabled ? "border-violet-300 bg-violet-500/10" : "border-border bg-muted/40"}`}>
+          <button type="button" onClick={() => updateEmailSettings({ emailDeliveryEnabled: emailSettings.emailDeliveryEnabled, signupVerificationEnabled: !emailSettings.signupVerificationEnabled, appScriptLoginEnabled: emailSettings.appScriptLoginEnabled, appScriptResetEnabled: emailSettings.appScriptResetEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.signupVerificationEnabled ? "border-violet-300 bg-violet-500/10" : "border-border bg-muted/40"}`}>
             <span><span className="block text-sm font-semibold">Signup verification</span><span className="mt-1 block text-[11px] text-muted-foreground">Require a six-digit email code before creating new accounts.</span></span>
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${emailSettings.signupVerificationEnabled ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground"}`}>{emailSettings.signupVerificationEnabled ? "REQUIRED" : "OPTIONAL"}</span>
           </button>
         </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <button type="button" onClick={() => updateEmailSettings({ emailDeliveryEnabled: emailSettings.emailDeliveryEnabled, signupVerificationEnabled: emailSettings.signupVerificationEnabled, appScriptLoginEnabled: !emailSettings.appScriptLoginEnabled, appScriptResetEnabled: emailSettings.appScriptResetEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.appScriptLoginEnabled ? "border-sky-300 bg-sky-500/10" : "border-border bg-muted/40"}`}>
+            <span><span className="block text-sm font-semibold">Apps Script · login code</span><span className="mt-1 block text-[11px] text-muted-foreground">Use the protected Apps Script relay for signup/login verification codes.</span></span>
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${emailSettings.appScriptLoginEnabled ? "bg-sky-600 text-white" : "bg-muted text-muted-foreground"}`}>{emailSettings.appScriptLoginEnabled ? "ON" : "OFF"}</span>
+          </button>
+          <button type="button" onClick={() => updateEmailSettings({ emailDeliveryEnabled: emailSettings.emailDeliveryEnabled, signupVerificationEnabled: emailSettings.signupVerificationEnabled, appScriptLoginEnabled: emailSettings.appScriptLoginEnabled, appScriptResetEnabled: !emailSettings.appScriptResetEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.appScriptResetEnabled ? "border-sky-300 bg-sky-500/10" : "border-border bg-muted/40"}`}>
+            <span><span className="block text-sm font-semibold">Apps Script · reset code</span><span className="mt-1 block text-[11px] text-muted-foreground">Use the protected Apps Script relay for password-reset codes.</span></span>
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${emailSettings.appScriptResetEnabled ? "bg-sky-600 text-white" : "bg-muted text-muted-foreground"}`}>{emailSettings.appScriptResetEnabled ? "ON" : "OFF"}</span>
+          </button>
+        </div>
+        <p className="mt-3 rounded-xl bg-sky-500/10 px-3 py-2 text-[11px] leading-5 text-sky-800 dark:text-sky-200">Apps Script endpoint and secret stay in secure project secrets, not in this panel. Replace them in Settings → Secrets when you rotate the sender account. No CAPTCHA is used; cooldowns and delivery limits protect the public endpoints.</p>
         {!emailSettings.emailDeliveryEnabled && emailSettings.signupVerificationEnabled && <p className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">Signup verification is paused because email delivery is off. Turn email delivery on before enabling verification.</p>}
       </div>
 

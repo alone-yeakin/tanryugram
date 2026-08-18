@@ -176,6 +176,13 @@
       "when": 1786990363754,
       "tag": "0024_careless_tomorrow_man",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1787030228074,
+      "tag": "0025_rare_colonel_america",
+      "breakpoints": true
     }
   ]
 }

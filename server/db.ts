@@ -68,24 +68,26 @@ export async function updateMediaUploadPolicy(userId: number, input: { photosEna
 }
 export async function getEmailDeliverySettings() {
   const db = await getDb();
-  if (!db) return { emailDeliveryEnabled: true, signupVerificationEnabled: false };
+  if (!db) return { emailDeliveryEnabled: true, signupVerificationEnabled: false, appScriptLoginEnabled: false, appScriptResetEnabled: false };
   const existing = (await db.select().from(emailDeliverySettings).limit(1))[0];
   if (existing) return existing;
-  await db.insert(emailDeliverySettings).values({ emailDeliveryEnabled: true, signupVerificationEnabled: false });
-  return (await db.select().from(emailDeliverySettings).limit(1))[0] ?? { emailDeliveryEnabled: true, signupVerificationEnabled: false };
+  await db.insert(emailDeliverySettings).values({ emailDeliveryEnabled: true, signupVerificationEnabled: false, appScriptLoginEnabled: false, appScriptResetEnabled: false });
+  return (await db.select().from(emailDeliverySettings).limit(1))[0] ?? { emailDeliveryEnabled: true, signupVerificationEnabled: false, appScriptLoginEnabled: false, appScriptResetEnabled: false };
 }
-export async function updateEmailDeliverySettings(userId: number, input: { emailDeliveryEnabled?: boolean; signupVerificationEnabled?: boolean }) {
+export async function updateEmailDeliverySettings(userId: number, input: { emailDeliveryEnabled?: boolean; signupVerificationEnabled?: boolean; appScriptLoginEnabled?: boolean; appScriptResetEnabled?: boolean }) {
   const db = await getDb();
-  if (!db) return { emailDeliveryEnabled: input.emailDeliveryEnabled ?? true, signupVerificationEnabled: input.signupVerificationEnabled ?? false };
+  if (!db) return { emailDeliveryEnabled: input.emailDeliveryEnabled ?? true, signupVerificationEnabled: input.signupVerificationEnabled ?? false, appScriptLoginEnabled: input.appScriptLoginEnabled ?? false, appScriptResetEnabled: input.appScriptResetEnabled ?? false };
   const existing = (await db.select().from(emailDeliverySettings).limit(1))[0];
   if (existing) {
     await db.update(emailDeliverySettings).set({
       ...(input.emailDeliveryEnabled !== undefined ? { emailDeliveryEnabled: input.emailDeliveryEnabled } : {}),
       ...(input.signupVerificationEnabled !== undefined ? { signupVerificationEnabled: input.signupVerificationEnabled } : {}),
+      ...(input.appScriptLoginEnabled !== undefined ? { appScriptLoginEnabled: input.appScriptLoginEnabled } : {}),
+      ...(input.appScriptResetEnabled !== undefined ? { appScriptResetEnabled: input.appScriptResetEnabled } : {}),
       updatedBy: userId,
     }).where(eq(emailDeliverySettings.id, existing.id));
   } else {
-    await db.insert(emailDeliverySettings).values({ emailDeliveryEnabled: input.emailDeliveryEnabled ?? true, signupVerificationEnabled: input.signupVerificationEnabled ?? false, updatedBy: userId });
+    await db.insert(emailDeliverySettings).values({ emailDeliveryEnabled: input.emailDeliveryEnabled ?? true, signupVerificationEnabled: input.signupVerificationEnabled ?? false, appScriptLoginEnabled: input.appScriptLoginEnabled ?? false, appScriptResetEnabled: input.appScriptResetEnabled ?? false, updatedBy: userId });
   }
   return getEmailDeliverySettings();
 }

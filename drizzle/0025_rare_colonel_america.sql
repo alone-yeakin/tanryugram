@@ -1,0 +1,2 @@
+ALTER TABLE `emailDeliverySettings` ADD `appScriptLoginEnabled` boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE `emailDeliverySettings` ADD `appScriptResetEnabled` boolean DEFAULT false NOT NULL;

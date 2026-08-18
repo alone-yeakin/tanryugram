@@ -66,8 +66,20 @@ async function sendWithLegacyMailer(input: VerificationEmail) {
   if (!payload.ok) throw new Error("Legacy mail endpoint rejected the request");
 }
 
-export async function sendVerificationEmail(input: VerificationEmail) {
+export async function sendVerificationEmail(input: VerificationEmail, options?: { transport?: "automatic" | "apps-script" }) {
   let brevoError: unknown;
+  let legacyError: unknown;
+  const preferAppsScript = options?.transport === "apps-script";
+
+  if (preferAppsScript && ENV.mailApiUrl && ENV.mailApiSecret) {
+    try {
+      await sendWithLegacyMailer(input);
+      return;
+    } catch (error) {
+      legacyError = error;
+    }
+  }
+
   if (ENV.brevoApiKey && ENV.brevoSenderEmail) {
     try {
       await sendWithBrevo(input);
@@ -77,12 +89,16 @@ export async function sendVerificationEmail(input: VerificationEmail) {
     }
   }
 
-  try {
-    await sendWithLegacyMailer(input);
-    return;
-  } catch (legacyError) {
-    const brevoMessage = brevoError instanceof Error ? brevoError.message : "Brevo unavailable";
-    const legacyMessage = legacyError instanceof Error ? legacyError.message : "Legacy mailer unavailable";
-    throw new Error(`Verification email delivery failed: ${brevoMessage}; ${legacyMessage}`);
+  if (!legacyError) {
+    try {
+      await sendWithLegacyMailer(input);
+      return;
+    } catch (error) {
+      legacyError = error;
+    }
   }
+
+  const brevoMessage = brevoError instanceof Error ? brevoError.message : "Brevo unavailable";
+  const legacyMessage = legacyError instanceof Error ? legacyError.message : "Apps Script mailer unavailable";
+  throw new Error(`Verification email delivery failed: ${brevoMessage}; ${legacyMessage}`);
 }
