@@ -504,3 +504,13 @@
 - [x] Full migration scope: include portable profiles, media references, posts, comments, likes/reactions, follows, saves, stories, direct messages, group memberships/messages, badges, subscriptions, settings, and timestamps—not only user IDs
 - [x] Security boundary: exclude passwords, session cookies, reset codes, push tokens, payment identifiers, API tokens, and server secrets; reactivate imported accounts through secure credential reset
 - [x] Archive design: version and validate the archive, preserve stable record IDs for cross-table relationships, and document private handling; application-level encryption remains a future hardening option
+
+- [x] Outreach: verify public TanRyuGram facts and define a truthful support/partnership offer
+- [x] Outreach: research legitimate hosting, domain, startup-credit, and creator-community prospects
+- [x] Outreach: prepare tailored emails and a recipient review list without sending yet
+- [x] Outreach: obtain explicit final approval before sending any Gmail messages
+
+- [x] Gemini assistant: add an owner-only Creator Studio feature assistant using the owner-provided Gemini API key
+- [x] Gemini security: keep the API key server-side and restrict all generation/proposal procedures to the configured owner
+- [x] Gemini workflow: show proposed changes and impact before any code or configuration change can be applied
+- [x] Gemini validation: add usage guidance, regression tests, and preserve the existing photo/media system

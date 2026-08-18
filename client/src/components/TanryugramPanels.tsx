@@ -66,6 +66,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const migrationInspectMutation = trpc.admin.migrationInspect.useMutation();
   const migrationImportMutation = trpc.admin.migrationImport.useMutation();
   const migrationFileInput = useRef<HTMLInputElement>(null);
+  const geminiProposalMutation = trpc.admin.geminiProposal.useMutation();
+  const geminiApplyMutation = trpc.admin.geminiApplySafeActions.useMutation();
   const utils = trpc.useUtils();
 
   const [instagramConnected, setInstagramConnected] = useState(false);
@@ -85,6 +87,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const [betaPreviewCounts, setBetaPreviewCounts] = useState<Record<number, number>>({});
   const [migrationJson, setMigrationJson] = useState("");
   const [migrationSummary, setMigrationSummary] = useState<any | null>(null);
+  const [geminiRequest, setGeminiRequest] = useState("");
+  const [geminiProposal, setGeminiProposal] = useState<any | null>(null);
   const updateUploadPolicy = (next: { photosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy) => { utils.admin.uploadPolicy.setData(undefined, policy); utils.media.policy.setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error) => toast.error(error.message) });
   const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.emailSettings.setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error) => toast.error(error.message) });
   const updateRecoverySettings = (next: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) => setRecoverySettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.recoverySettings.setData(undefined, settings); setWhatsappNumber(settings.whatsappSupportNumber); utils.recovery.settings.invalidate(); toast.success("Recovery support settings updated"); }, onError: (error) => toast.error(error.message) });
@@ -106,6 +110,17 @@ export function AdminView({ onTip }: { onTip: () => void }) {
     if (!migrationJson || !migrationSummary) return toast.error("Choose and validate a migration archive first");
     if (!window.confirm(`Import ${migrationSummary.users} users and their full history? This is intended for a fresh destination and cannot be undone.`)) return;
     migrationImportMutation.mutate({ archiveJson: migrationJson, confirm: true }, { onSuccess: (result) => toast.success("Migration archive imported", { description: `${result.users} accounts require password reset before sign-in.` }), onError: (error) => toast.error(error.message) });
+  };
+
+  const requestGeminiProposal = () => {
+    const request = geminiRequest.trim();
+    if (!request) return toast.error("Describe the feature or setting you want to change");
+    geminiProposalMutation.mutate({ request }, { onSuccess: (proposal) => { setGeminiProposal(proposal); toast.success("Gemini proposal ready", { description: "Review the warning and steps before applying any safe settings." }); }, onError: (error) => toast.error(error.message) });
+  };
+  const applyGeminiProposal = () => {
+    if (!geminiProposal || !Array.isArray(geminiProposal.safeActions) || geminiProposal.safeActions.length === 0) return toast.error("This proposal has no safe live settings to apply");
+    if (!window.confirm(`Apply ${geminiProposal.safeActions.length} safe Creator Studio setting change(s)?`)) return;
+    geminiApplyMutation.mutate({ actions: geminiProposal.safeActions }, { onSuccess: (result) => { setGeminiProposal(null); utils.admin.emailSettings.invalidate(); utils.admin.uploadPolicy.invalidate(); utils.media.policy.invalidate(); toast.success("Approved settings applied", { description: `${result.applied.length} safe change(s) were applied.` }); }, onError: (error) => toast.error(error.message) });
   };
 
   const handleInstagramConnect = () => {
@@ -246,6 +261,20 @@ export function AdminView({ onTip }: { onTip: () => void }) {
         </div>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row"><input value={whatsappNumber} onChange={(event) => setWhatsappNumber(event.target.value)} placeholder="+8801404841981" className="h-11 flex-1 rounded-2xl border border-border bg-background px-4 text-sm outline-none focus:border-violet-500" /><button onClick={() => updateRecoverySettings({ guestRecoveryEnabled: recoverySettings.guestRecoveryEnabled, whatsappSupportEnabled: recoverySettings.whatsappSupportEnabled, whatsappSupportNumber: whatsappNumber })} className="min-h-11 rounded-2xl bg-foreground px-4 text-xs font-semibold text-background">Save WhatsApp number</button></div>
         <div className="mt-5 space-y-3"><div className="flex items-center justify-between"><h4 className="text-sm font-semibold">Owner recovery inbox</h4><span className="text-[11px] text-muted-foreground">{recoveryInboxQuery.data?.length ?? 0} requests</span></div>{recoveryInboxQuery.data?.length ? recoveryInboxQuery.data.map((request) => <div key={request.id} className="rounded-2xl border border-border bg-muted/30 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-sm font-semibold">{request.guestLabel || "Guest recovery request"}</p><p className="text-[11px] text-muted-foreground">{request.accountEmail || "Email not provided"} · {request.status}</p></div><button onClick={() => closeRecoveryMutation.mutate({ requestId: request.id }, { onSuccess: () => { utils.admin.recoveryInbox.invalidate(); toast.success("Recovery request closed"); }, onError: (error) => toast.error(error.message) })} className="rounded-xl border border-border px-3 py-1.5 text-[10px] font-semibold">Close</button></div><div className="mt-3 space-y-2">{request.messages.map((message) => <div key={message.id} className={`rounded-xl p-3 text-xs ${message.senderType === "owner" ? "bg-violet-600 text-white" : "bg-card"}`}><p>{message.body}</p><p className="mt-1 text-[10px] opacity-60">{message.senderType === "owner" ? "You" : "Guest"} · {new Date(message.createdAt).toLocaleString()}</p></div>)}</div><div className="mt-3 flex gap-2"><input value={recoveryReplies[request.id] ?? ""} onChange={(event) => setRecoveryReplies((current) => ({ ...current, [request.id]: event.target.value }))} placeholder="Reply without asking for a password" className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-xs outline-none focus:border-violet-500" /><button onClick={() => { const body = (recoveryReplies[request.id] ?? "").trim(); if (!body) return; replyRecoveryMutation.mutate({ requestId: request.id, body }, { onSuccess: () => { setRecoveryReplies((current) => ({ ...current, [request.id]: "" })); utils.admin.recoveryInbox.invalidate(); toast.success("Reply sent"); }, onError: (error) => toast.error(error.message) }); }} className="rounded-xl bg-violet-600 px-3 text-xs font-semibold text-white">Reply</button></div></div>) : <p className="rounded-2xl bg-muted/40 p-4 text-xs text-muted-foreground">No active guest recovery requests.</p>}</div>
+      </div>
+
+      <div className="rounded-[28px] border border-violet-300/70 bg-violet-500/5 p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-600">Owner automation</p>
+            <h3 className="mt-1 flex items-center gap-2 font-semibold"><Sparkles className="h-4 w-4 text-violet-600" /> Gemini feature assistant</h3>
+            <p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted-foreground">Describe a feature or setting in plain language. Gemini creates a proposal first. Only safe Creator Studio settings can be applied here; source-code changes require a reviewed development update and deployment.</p>
+          </div>
+          <span className="w-fit rounded-full bg-violet-500/15 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">Owner only</span>
+        </div>
+        <div className="mt-5 flex flex-col gap-3"><textarea value={geminiRequest} onChange={(event) => setGeminiRequest(event.target.value)} placeholder="Example: turn on signup email verification and keep photo uploads enabled" className="min-h-24 w-full resize-y rounded-2xl border border-border bg-background p-4 text-sm outline-none focus:border-violet-500" /><button type="button" onClick={requestGeminiProposal} disabled={geminiProposalMutation.isPending} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"><Sparkles className="h-4 w-4" />{geminiProposalMutation.isPending ? "Asking Gemini…" : "Create proposal"}</button></div>
+        {geminiProposal && <div className="mt-4 rounded-2xl border border-violet-300/70 bg-card p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold">{geminiProposal.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{geminiProposal.summary}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${geminiProposal.requiresCodeChange ? "bg-amber-500/15 text-amber-700" : "bg-emerald-500/15 text-emerald-700"}`}>{geminiProposal.requiresCodeChange ? "CODE REVIEW NEEDED" : "SAFE SETTINGS"}</span></div><div className="mt-3 space-y-1 text-[11px] text-muted-foreground">{geminiProposal.steps?.map((step: string, index: number) => <p key={`${step}-${index}`}>{index + 1}. {step}</p>)}</div>{geminiProposal.warning && <p className="mt-3 rounded-xl bg-amber-500/10 p-3 text-[11px] leading-5 text-amber-800 dark:text-amber-200">{geminiProposal.warning}</p>}{geminiProposal.safeActions?.length > 0 && <button type="button" onClick={applyGeminiProposal} disabled={geminiApplyMutation.isPending} className="mt-4 min-h-11 rounded-xl bg-foreground px-4 py-2 text-xs font-semibold text-background disabled:opacity-50">{geminiApplyMutation.isPending ? "Applying…" : "Review and apply safe settings"}</button>}</div>}
+        <p className="mt-3 text-[11px] leading-5 text-violet-800/80 dark:text-violet-200/80">The Gemini key is stored server-side and never shown to users. Gemini proposals use your Google API quota and may be subject to Google’s limits. Existing photo and media rendering code is not modified by this assistant.</p>
       </div>
 
       <div className="rounded-[28px] border border-amber-300/70 bg-amber-500/5 p-6 shadow-sm">
