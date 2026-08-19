@@ -262,6 +262,14 @@ export const follows = mysqlTable("follows", {
   followingId: int("followingId").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+export const followRequests = mysqlTable("followRequests", {
+  id: int("id").autoincrement().primaryKey(),
+  requesterId: int("requesterId").notNull(),
+  targetUserId: int("targetUserId").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "cancelled"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
 
 export const badgeApplications = mysqlTable("badgeApplications", {
   id: int("id").autoincrement().primaryKey(),

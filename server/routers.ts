@@ -251,17 +251,21 @@ export const appRouter = router({
     likeState: protectedProcedure.input(z.object({ postId: z.number() })).query(({ ctx, input }) => db.getLikeSaveState(input.postId, ctx.user.id)),
   }),
   follows: router({
-    toggle: protectedProcedure.input(z.object({ userId: z.number() })).mutation(async ({ ctx, input }) => { const result = await db.toggleFollow(ctx.user.id, input.userId); if (result.following && input.userId !== ctx.user.id) await db.createNotification({ userId: input.userId, actorId: ctx.user.id, type: "follow", content: result.isFollowBack ? "followed you back" : "started following you" }); return result; }),
+    toggle: protectedProcedure.input(z.object({ userId: z.number() })).mutation(async ({ ctx, input }) => { const result = await db.toggleFollow(ctx.user.id, input.userId); if (result.following && input.userId !== ctx.user.id) await db.createNotification({ userId: input.userId, actorId: ctx.user.id, type: "follow", content: result.isFollowBack ? "followed you back" : "started following you" }); if (result.requestPending && input.userId !== ctx.user.id) await db.createNotification({ userId: input.userId, actorId: ctx.user.id, type: "follow", content: "requested to follow you" }); return result; }),
     state: protectedProcedure.input(z.object({ userId: z.number() })).query(({ ctx, input }) => db.getFollowState(ctx.user.id, input.userId)),
+    requestState: protectedProcedure.input(z.object({ userId: z.number() })).query(({ ctx, input }) => db.getFollowRequestState(ctx.user.id, input.userId)),
     followers: protectedProcedure.input(z.object({ userId: z.number() })).query(({ ctx, input }) => db.getFollowers(input.userId, ctx.user.id)),
     following: publicProcedure.input(z.object({ userId: z.number() })).query(({ ctx, input }) => db.getFollowing(input.userId, ctx.user?.id)),
-    updatePrivacy: protectedProcedure.input(z.object({ showFollowersList: z.boolean().optional(), showFollowingList: z.boolean().optional() })).mutation(async ({ ctx, input }) => {
+    incomingRequests: protectedProcedure.query(({ ctx }) => db.getIncomingFollowRequests(ctx.user.id)),
+    privacy: protectedProcedure.query(async ({ ctx }) => { const database = await db.getDb(); if (!database) return { isPrivate: false, showFollowersList: true, showFollowingList: true }; const row = (await database.select({ user: users, settings: userSettings }).from(users).leftJoin(userSettings, eq(userSettings.userId, users.id)).where(eq(users.id, ctx.user.id)).limit(1))[0]; return { isPrivate: Boolean(row?.settings?.isPrivate), showFollowersList: row?.user?.showFollowersList !== false, showFollowingList: row?.user?.showFollowingList !== false }; }),
+    reviewRequest: protectedProcedure.input(z.object({ requestId: z.number().int().positive(), status: z.enum(["approved", "rejected"]) })).mutation(async ({ ctx, input }) => { const result = await db.reviewFollowRequest(ctx.user.id, input.requestId, input.status); if (input.status === "approved" && "requesterId" in result && result.requesterId) await db.createNotification({ userId: result.requesterId, actorId: ctx.user.id, type: "follow", content: "approved your follow request" }); return result; }),
+    updatePrivacy: protectedProcedure.input(z.object({ showFollowersList: z.boolean().optional(), showFollowingList: z.boolean().optional(), isPrivate: z.boolean().optional() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) return;
-      await database.update(users).set({
-        ...(input.showFollowersList !== undefined ? { showFollowersList: input.showFollowersList } : {}),
-        ...(input.showFollowingList !== undefined ? { showFollowingList: input.showFollowingList } : {}),
-      }).where(eq(users.id, ctx.user.id));
+      const existing = (await database.select().from(userSettings).where(eq(userSettings.userId, ctx.user.id)).limit(1))[0];
+      if (existing) await database.update(userSettings).set({ ...(input.isPrivate !== undefined ? { isPrivate: input.isPrivate } : {}) }).where(eq(userSettings.userId, ctx.user.id));
+      else await database.insert(userSettings).values({ userId: ctx.user.id, isPrivate: input.isPrivate ?? false });
+      await database.update(users).set({ ...(input.showFollowersList !== undefined ? { showFollowersList: input.showFollowersList } : {}), ...(input.showFollowingList !== undefined ? { showFollowingList: input.showFollowingList } : {}) }).where(eq(users.id, ctx.user.id));
       return { success: true };
     }),
   }),

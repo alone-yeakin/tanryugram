@@ -519,3 +519,18 @@
 - [x] Gemini chat security: bound conversation history, keep platform context safe, and preserve owner authorization
 - [x] Gemini chat UX: add message history, clear chat, loading/error states, and confirmation-gated safe actions
 - [x] Gemini chat validation: add tests, verify the panel, and publish without changing the photo/media system
+
+- [x] Packaging: create a clean full TanRyuGram source ZIP from the current working checkpoint without modifying application code
+- [x] Packaging safety: exclude secrets, environment values, dependency caches, build outputs, logs, and private runtime files
+- [x] Migration guide: write a plain-text Hostinger and local-provider setup guide covering DNS, database, storage, email, Gemini, Android, and alternatives
+- [x] Packaging validation: inspect ZIP contents, verify required source files are present, and deliver the archive plus guide
+
+- [x] Outreach expansion: verify relevant Bangladeshi and international organizations and their official contact routes
+- [x] Outreach expansion: prepare truthful tailored proposals for hosting, startup support, creator communities, and technology partnerships
+- [x] Outreach expansion: send a small targeted batch without mass-mailing or unverified recipients
+- [x] Outreach expansion: check Gmail for acknowledgments and report the results; no immediate bounce or substantive response was visible
+
+- [x] Profile navigation: make Followers and Following controls open visible lists from user profiles
+- [x] Profile privacy: add account settings to show or hide follower and following lists
+- [x] Private profiles: add a lock toggle and route new follows into approval requests
+- [x] Profile validation: preserve all photo/media paths, add regression tests, verify mobile/desktop flows, and publish

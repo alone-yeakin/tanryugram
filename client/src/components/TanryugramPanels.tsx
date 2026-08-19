@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { initialsAvatar, mediaSource } from "@/lib/mediaUrl";
@@ -514,8 +514,16 @@ export function AccountSettings({ user, onClose }: { user: any; onClose: () => v
   const applyBadgeMutation = trpc.profile.applyForBadge.useMutation();
   const [requestedBadge, setRequestedBadge] = useState<"blue" | "black">("blue");
   const [badgeReason, setBadgeReason] = useState("");
+  const privacyQuery = trpc.follows.privacy.useQuery();
+  const [isPrivate, setIsPrivate] = useState(false);
   const [showFollowersList, setShowFollowersList] = useState((user as any)?.showFollowersList ?? true);
   const [showFollowingList, setShowFollowingList] = useState((user as any)?.showFollowingList ?? true);
+  useEffect(() => {
+    if (!privacyQuery.data) return;
+    setIsPrivate(privacyQuery.data.isPrivate);
+    setShowFollowersList(privacyQuery.data.showFollowersList);
+    setShowFollowingList(privacyQuery.data.showFollowingList);
+  }, [privacyQuery.data]);
   const updatePrivacyMutation = trpc.follows.updatePrivacy.useMutation({
     onSuccess: () => {
       toast.success("List privacy settings updated");
@@ -645,7 +653,12 @@ export function AccountSettings({ user, onClose }: { user: any; onClose: () => v
             <div className="mt-3 space-y-1">{(badgeApplicationsQuery.data || []).slice(0, 3).map((application: any) => <p key={application.id} className="text-[10px] text-muted-foreground">{application.requestedBadge} badge · <span className="font-semibold uppercase">{application.status}</span></p>)}</div>
           </div>
           <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4">
-            <p className="text-xs font-semibold">List Privacy Settings</p>
+            <p className="text-xs font-semibold">Profile Privacy</p>
+            <label className="flex items-center justify-between gap-3 text-xs cursor-pointer">
+              <span><span className="font-semibold">Private profile</span><span className="mt-1 block text-[10px] text-muted-foreground">New followers must be approved before they can follow you.</span></span>
+              <input type="checkbox" checked={isPrivate} onChange={(e) => { const val = e.target.checked; setIsPrivate(val); updatePrivacyMutation.mutate({ isPrivate: val }); }} className="h-4 w-4 rounded border-border" />
+            </label>
+            <p className="pt-1 text-xs font-semibold">List Privacy Settings</p>
             <label className="flex items-center justify-between gap-3 text-xs cursor-pointer">
               <span>Show Followers List to others</span>
               <input type="checkbox" checked={showFollowersList} onChange={(e) => { const val = e.target.checked; setShowFollowersList(val); updatePrivacyMutation.mutate({ showFollowersList: val }); }} className="h-4 w-4 rounded border-border" />

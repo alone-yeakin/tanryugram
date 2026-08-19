@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { eq, and, or, like, desc, sql, inArray } from "drizzle-orm";
 import { canDeletePost, isTanryugramOwner } from "./authorization";
 import { resolveDisplayedFollowerCount } from "./followerStats";
-import { calls, comments, follows, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, emailDeliverySettings, recoverySupportSettings, recoverySupportRequests, groupInviteRequests, recoverySupportMessages, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
+import { calls, comments, follows, followRequests, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, emailDeliverySettings, recoverySupportSettings, recoverySupportRequests, groupInviteRequests, recoverySupportMessages, messageHidden, messageReactions, messages, notifications, postMedia, postReactions, posts, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, users, type InsertPost, type InsertUser } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
@@ -195,15 +195,49 @@ export async function togglePostSave(postId: number, userId: number) { const db 
 export async function createComment(postId: number, userId: number, content: string) { const db = await getDb(); if (!db) return undefined; const id = (await db.insert(comments).values({ postId, userId, content }))[0]?.insertId; await db.update(posts).set({ commentsCount: sql`${posts.commentsCount} + 1` }).where(eq(posts.id, postId)); return id; }
 export async function toggleFollow(followerId: number, followingId: number) {
   const db = await getDb();
-  if (!db) return { following: false, isFollowBack: false };
+  if (!db) return { following: false, isFollowBack: false, requestPending: false };
+  if (followerId === followingId) throw new Error("You cannot follow yourself");
+  const target = (await db.select({ user: users, settings: userSettings }).from(users).leftJoin(userSettings, eq(userSettings.userId, users.id)).where(eq(users.id, followingId)).limit(1))[0];
+  if (!target?.user) throw new Error("Profile not found");
   const row = (await db.select().from(follows).where(and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))).limit(1))[0];
   if (row) {
     await db.delete(follows).where(eq(follows.id, row.id));
-    return { following: false, isFollowBack: false };
+    return { following: false, isFollowBack: false, requestPending: false };
+  }
+  const pending = (await db.select().from(followRequests).where(and(eq(followRequests.requesterId, followerId), eq(followRequests.targetUserId, followingId), eq(followRequests.status, "pending"))).limit(1))[0];
+  if (pending) {
+    await db.update(followRequests).set({ status: "cancelled" }).where(eq(followRequests.id, pending.id));
+    return { following: false, isFollowBack: false, requestPending: false };
+  }
+  if (target.settings?.isPrivate) {
+    await db.insert(followRequests).values({ requesterId: followerId, targetUserId: followingId, status: "pending" });
+    return { following: false, isFollowBack: false, requestPending: true };
   }
   const reverse = (await db.select().from(follows).where(and(eq(follows.followerId, followingId), eq(follows.followingId, followerId))).limit(1))[0];
   await db.insert(follows).values({ followerId, followingId });
-  return { following: true, isFollowBack: Boolean(reverse) };
+  return { following: true, isFollowBack: Boolean(reverse), requestPending: false };
+}
+export async function getFollowRequestState(requesterId: number, targetUserId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  return Boolean((await db.select().from(followRequests).where(and(eq(followRequests.requesterId, requesterId), eq(followRequests.targetUserId, targetUserId), eq(followRequests.status, "pending"))).limit(1))[0]);
+}
+export async function getIncomingFollowRequests(targetUserId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ request: followRequests, user: users }).from(followRequests).innerJoin(users, eq(followRequests.requesterId, users.id)).where(and(eq(followRequests.targetUserId, targetUserId), eq(followRequests.status, "pending"))).orderBy(desc(followRequests.createdAt));
+}
+export async function reviewFollowRequest(targetUserId: number, requestId: number, status: "approved" | "rejected") {
+  const db = await getDb();
+  if (!db) return { status };
+  const request = (await db.select().from(followRequests).where(and(eq(followRequests.id, requestId), eq(followRequests.targetUserId, targetUserId), eq(followRequests.status, "pending"))).limit(1))[0];
+  if (!request) throw new Error("Follow request not found");
+  if (status === "approved") {
+    const existing = (await db.select().from(follows).where(and(eq(follows.followerId, request.requesterId), eq(follows.followingId, targetUserId))).limit(1))[0];
+    if (!existing) await db.insert(follows).values({ followerId: request.requesterId, followingId: targetUserId });
+  }
+  await db.update(followRequests).set({ status }).where(eq(followRequests.id, requestId));
+  return { status, requesterId: request.requesterId };
 }
 export async function sendMessage(senderId: number, receiverId: number, content: string, replyToId?: number, audioUrl?: string) { const db = await getDb(); if (!db) return undefined; return (await db.insert(messages).values({ senderId, receiverId, content, replyToId, audioUrl }))[0]?.insertId; }
 export async function toggleMessageReaction(messageId: number, userId: number, emoji: string) { const db = await getDb(); if (!db) return; const existing = (await db.select().from(messageReactions).where(and(eq(messageReactions.messageId, messageId), eq(messageReactions.userId, userId), eq(messageReactions.emoji, emoji))).limit(1))[0]; if (existing) await db.delete(messageReactions).where(eq(messageReactions.id, existing.id)); else await db.insert(messageReactions).values({ messageId, userId, emoji }); }
@@ -667,7 +701,15 @@ export async function sendGroupMessage(groupId: number, senderId: number, conten
   }
   return id;
 }
-export async function getProfileById(userId: number) { const user = await getUserById(userId); const stats = await getUserStats(userId); const profilePosts = await getProfilePosts(userId); return { user, stats, posts: profilePosts }; }
+export async function getProfileById(userId: number) {
+  const db = await getDb();
+  const user = await getUserById(userId);
+  if (!user) return { user: undefined, stats: { followers: 0, following: 0, posts: 0 }, posts: [], privacy: { isPrivate: false } };
+  const settings = db ? (await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1))[0] : undefined;
+  const stats = await getUserStats(userId);
+  const profilePosts = await getProfilePosts(userId);
+  return { user, stats, posts: profilePosts, privacy: { isPrivate: Boolean(settings?.isPrivate) } };
+}
 export async function getComments(postId: number) { const db = await getDb(); if (!db) return []; return db.select({ comment: comments, author: users }).from(comments).innerJoin(users, eq(comments.userId, users.id)).where(eq(comments.postId, postId)).orderBy(desc(comments.createdAt)).limit(50); }
 export async function getFollowState(followerId: number, followingId: number) { const db = await getDb(); if (!db) return false; return (await db.select().from(follows).where(and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))).limit(1)).length > 0; }
 export async function getFollowers(userId: number, viewerId?: number) {
@@ -676,7 +718,9 @@ export async function getFollowers(userId: number, viewerId?: number) {
   const targetUser = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0];
   if (!targetUser) return [];
   const isOwner = viewerId === userId;
-  if (!targetUser.showFollowersList && !isOwner) return [];
+  const settings = (await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1))[0];
+  const isApprovedViewer = viewerId !== undefined && (await db.select().from(follows).where(and(eq(follows.followerId, viewerId), eq(follows.followingId, userId))).limit(1)).length > 0;
+  if ((!targetUser.showFollowersList && !isOwner) || (settings?.isPrivate && !isOwner && !isApprovedViewer)) return [];
   const rows = await db.select({ user: users }).from(follows).innerJoin(users, eq(follows.followerId, users.id)).where(eq(follows.followingId, userId));
   return rows.map((r) => r.user);
 }
@@ -686,7 +730,9 @@ export async function getFollowing(userId: number, viewerId?: number) {
   const targetUser = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0];
   if (!targetUser) return [];
   const isOwner = viewerId === userId;
-  if (!targetUser.showFollowingList && !isOwner) return [];
+  const settings = (await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1))[0];
+  const isApprovedViewer = viewerId !== undefined && (await db.select().from(follows).where(and(eq(follows.followerId, viewerId), eq(follows.followingId, userId))).limit(1)).length > 0;
+  if ((!targetUser.showFollowingList && !isOwner) || (settings?.isPrivate && !isOwner && !isApprovedViewer)) return [];
   const rows = await db.select({ user: users }).from(follows).innerJoin(users, eq(follows.followingId, users.id)).where(eq(follows.followerId, userId));
   return rows.map((r) => r.user);
 }

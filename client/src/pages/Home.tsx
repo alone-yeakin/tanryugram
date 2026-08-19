@@ -9,7 +9,7 @@ import { initialsAvatar } from "@/lib/mediaUrl";
 import { resolveProfileUser } from "@/lib/profileViewData";
 import { toast } from "sonner";
 import {
-  Bell, Bookmark, Check, ChevronRight, CircleHelp, Compass, CreditCard, Download, Heart, Home as HomeIcon, ImagePlus, LogOut, Mail, Menu, MessageCircle, MoreHorizontal, Moon, PhoneCall, PhoneIncoming, PhoneMissed, Play, Plus, Search, Send, Settings, ShieldCheck, Sparkles, Sun, Users, Video, X, Zap,
+  Bell, Bookmark, Check, ChevronRight, CircleHelp, Compass, CreditCard, Download, Heart, Home as HomeIcon, ImagePlus, Lock, LogOut, Mail, Menu, MessageCircle, MoreHorizontal, Moon, PhoneCall, PhoneIncoming, PhoneMissed, Play, Plus, Search, Send, Settings, ShieldCheck, Sparkles, Sun, Users, Video, X, Zap,
 } from "lucide-react";
 import { LoginPanel, AdminView, AccountSettings } from "@/components/TanryugramPanels";
 import { AdvancedMessagesView, MultiImageComposer, ReactionButton, StoryBarLive, StoryViewerLive } from "@/components/TanryugramAdvancedFeatures";
@@ -270,6 +270,16 @@ function NotificationRow({ row }: { row: any }) { const visual = notificationIco
 function MessagesView({ message, setMessage, profileAvatar, onSend }: { message: string; setMessage: (value: string) => void; profileAvatar: string; onSend: () => void }) { const thread = [{ incoming: true, text: "That studio shot is so good. The natural light is doing all the work.", time: "10:42" }, { incoming: false, text: "Right? We moved the desk three times before it felt right.", time: "10:44" }, { incoming: true, text: "The messy middle always shows. Want to send me the full edit?", time: "10:46" }]; return <div className="grid min-h-[620px] overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-sm lg:grid-cols-[250px_1fr]"><div className="hidden border-r border-border/70 lg:block"><div className="border-b border-border/70 p-5"><div className="flex items-center justify-between"><h2 className="font-semibold">Messages</h2><button className="rounded-full p-2 hover:bg-muted"><EditIcon /></button></div><div className="relative mt-4"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><input placeholder="Search inbox" className="h-9 w-full rounded-xl bg-muted pl-9 text-xs outline-none" /></div></div><div className="p-3"><div className="flex items-center gap-3 rounded-2xl bg-muted p-3"><Avatar src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=96&q=80" size="sm" /><div className="min-w-0 flex-1"><p className="text-xs font-semibold">Theo Makes</p><p className="truncate text-[10px] text-muted-foreground">The studio shot is so good...</p></div><span className="h-2 w-2 rounded-full bg-emerald-500" /></div>{["Nadia Codes", "Aria Sol", "Mika Studio"].map((name, index) => <div key={name} className="flex items-center gap-3 rounded-2xl p-3 hover:bg-muted"><Avatar src={fallbackStories[index + 1]?.image} size="sm" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{name}</p><p className="text-[10px] text-muted-foreground">Active recently</p></div></div>)}</div></div><div className="flex min-w-0 flex-col"><div className="flex items-center gap-3 border-b border-border/70 p-4 sm:p-5"><Avatar src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=96&q=80" size="sm" /><div className="flex-1"><p className="text-sm font-semibold">Theo Makes</p><p className="text-[11px] text-emerald-500">Active now</p></div><button className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><CircleHelp className="h-4 w-4" /></button></div><div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">{thread.map((item) => <div key={item.time} className={`flex ${item.incoming ? "justify-start" : "justify-end"}`}><div className={`max-w-[78%] ${item.incoming ? "items-start" : "items-end"} flex flex-col gap-1`}><div className={`rounded-[20px] px-4 py-3 text-sm leading-6 ${item.incoming ? "rounded-bl-md bg-muted" : "rounded-br-md bg-foreground text-background"}`}>{item.text}</div><span className="px-1 text-[10px] text-muted-foreground">{item.time} {!item.incoming && <span className="ml-1 text-blue-500">✓✓</span>}</span></div></div>)}<div className="flex justify-center"><span className="rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">Messages are encrypted in transit</span></div></div><div className="border-t border-border/70 p-3 sm:p-4"><div className="flex items-center gap-2 rounded-2xl bg-muted p-1.5"><button className="rounded-xl p-2 text-muted-foreground hover:bg-card"><Plus className="h-4 w-4" /></button><input value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onSend()} placeholder="Write a message..." className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground" /><button onClick={onSend} className="rounded-xl bg-foreground p-2.5 text-background transition active:scale-90"><Send className="h-4 w-4" /></button></div></div></div></div>; }
 function EditIcon() { return <span className="text-xs font-semibold">New</span>; }
 
+function ProfileListModal({ title, rows, loading, onClose, onSelectUser }: { title: string; rows?: any[]; loading?: boolean; onClose: () => void; onSelectUser: (user: any) => void }) {
+  return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-foreground/35 p-3 backdrop-blur-sm sm:items-center" onClick={onClose}>
+    <div className="max-h-[min(680px,88dvh)] w-full max-w-md overflow-hidden rounded-[28px] border border-border bg-card shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      <div className="flex items-center justify-between border-b border-border/70 px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500">Profile</p><h2 className="mt-1 text-lg font-semibold">{title}</h2></div><button onClick={onClose} aria-label={`Close ${title}`} className="rounded-full p-2 hover:bg-muted"><X className="h-4 w-4" /></button></div>
+      <div className="max-h-[calc(min(680px,88dvh)-76px)] overflow-y-auto p-4 [overscroll-behavior:contain]">
+        {loading ? <div className="space-y-2">{[1, 2, 3].map((item) => <div key={item} className="h-16 animate-pulse rounded-2xl bg-muted" />)}</div> : rows?.length ? <div className="space-y-2">{rows.map((row: any) => { const person = row.user || row; return <button key={person.id} onClick={() => { onClose(); onSelectUser(person); }} className="flex min-h-16 w-full items-center gap-3 rounded-2xl p-3 text-left transition hover:bg-muted"><Avatar src={person.avatarUrl} size="sm" name={person.name || person.username} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.name || person.username || "TanRyuGram member"}</span><span className="block truncate text-xs text-muted-foreground">@{person.username || "member"}</span></span><ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" /></button>; })}</div> : <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No {title.toLowerCase()} to show yet.</div>}
+      </div>
+    </div>
+  </div>;
+}
 function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip, onOpenMessage }: { profileUser: any; currentUser: any; isAuthenticated: boolean; onLogin: () => void; onTip: () => void; onOpenMessage: (u: any) => void }) {
   const profileId = Number(profileUser?.id || 0);
   const profileQuery = trpc.profile.byId.useQuery({ userId: profileId }, { enabled: profileId > 0, refetchOnWindowFocus: true });
@@ -278,7 +288,8 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
   
   const targetUser = resolveProfileUser(profileUser, profileQuery.data?.user);
   const targetUserId = Number(targetUser?.id || profileId || 0);
-  const userPosts = profileQuery.data?.posts || [];
+  const isPrivateProfile = Boolean(profileQuery.data?.privacy?.isPrivate);
+  const allUserPosts = profileQuery.data?.posts || [];
 
   const stats = profileQuery.data?.stats || { followers: 0, following: 0, posts: 0 };
   const bioText = targetUser?.bio || "Creative director, occasional photographer, and believer in sharing the work before it is finished.";
@@ -288,13 +299,17 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
   const isOwnProfile = currentUser?.id === targetUser?.id;
 
   const [activeListModal, setActiveListModal] = useState<"followers" | "following" | null>(null);
-  const canViewFollowers = isOwnProfile || targetUser?.showFollowersList !== false;
-  const canViewFollowing = isOwnProfile || targetUser?.showFollowingList !== false;
-  const followersQuery = trpc.follows.followers.useQuery({ userId: targetUserId }, { enabled: canViewFollowers && activeListModal === "followers" && targetUserId > 0 });
-  const followingQuery = trpc.follows.following.useQuery({ userId: targetUserId }, { enabled: canViewFollowing && activeListModal === "following" && targetUserId > 0 });
+  const followersQuery = trpc.follows.followers.useQuery({ userId: targetUserId }, { enabled: targetUserId > 0 && activeListModal === "followers" });
+  const followingQuery = trpc.follows.following.useQuery({ userId: targetUserId }, { enabled: targetUserId > 0 && activeListModal === "following" });
   const followStateQuery = trpc.follows.state.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && !isOwnProfile && targetUserId > 0 });
+  const followRequestQuery = trpc.follows.requestState.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && !isOwnProfile && targetUserId > 0 });
   const toggleFollowMutation = trpc.follows.toggle.useMutation();
   const isFollowing = Boolean(followStateQuery.data);
+  const requestPending = Boolean(followRequestQuery.data);
+  const canSeePrivateProfile = !isPrivateProfile || isOwnProfile || isFollowing;
+  const userPosts = canSeePrivateProfile ? allUserPosts : [];
+  const canViewFollowers = canSeePrivateProfile && (isOwnProfile || targetUser?.showFollowersList !== false);
+  const canViewFollowing = canSeePrivateProfile && (isOwnProfile || targetUser?.showFollowingList !== false);
 
   const handleFollow = () => {
     if (!isAuthenticated) {
@@ -308,7 +323,8 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
         utils.profile.byId.invalidate({ userId: targetUserId });
         utils.follows.followers.invalidate({ userId: targetUserId });
         utils.follows.following.invalidate({ userId: targetUserId });
-        toast.success(result.following ? `You are now following @${handle}` : `You unfollowed @${handle}`);
+        followRequestQuery.refetch();
+        toast.success(result.requestPending ? `Follow request sent to @${handle}` : result.following ? `You are now following @${handle}` : `You unfollowed @${handle}`);
       },
       onError: (error) => toast.error(error.message),
     });
@@ -341,7 +357,7 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
                 {targetUser?.badgeLabel || (targetUser?.isCreator ? "Creator" : "Member")}
               </span>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">@{handle}</p>
+              <p className="mt-1 text-sm text-muted-foreground">@{handle} {isPrivateProfile && <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold"><Lock className="h-3 w-3" /> Private</span>}</p>
             <p className="mt-4 max-w-xl text-sm leading-6 whitespace-pre-wrap">{bioText}</p>
             <div className="mt-5 flex gap-6">
               <Stat label="Posts" value={String(stats.posts || userPosts.length)} />
@@ -350,7 +366,7 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {!isOwnProfile && <ProfileFollowButton isAuthenticated={isAuthenticated} isFollowing={isFollowing} isPending={toggleFollowMutation.isPending} onFollow={handleFollow} onLogin={onLogin} />}
+            {!isOwnProfile && <ProfileFollowButton isAuthenticated={isAuthenticated} isFollowing={isFollowing} requestPending={requestPending} isPending={toggleFollowMutation.isPending} onFollow={handleFollow} onLogin={onLogin} />}
             {!isOwnProfile && isAuthenticated && <ProfileMessageButton user={targetUser} onOpen={onOpenMessage} />}
             <button onClick={onTip} className="rounded-xl border border-border px-4 py-2.5 text-xs font-semibold">Tip creator</button>
           </div>
@@ -362,7 +378,9 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
         <button className="pb-3 text-xs font-semibold text-muted-foreground">Tagged</button>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-        {userPosts.length === 0 ? (
+        {isPrivateProfile && !canSeePrivateProfile ? (
+          <div className="col-span-full rounded-[24px] border border-dashed border-border p-8 text-center"><Lock className="mx-auto h-5 w-5 text-muted-foreground" /><p className="mt-3 text-sm font-semibold">This profile is private</p><p className="mt-1 text-xs text-muted-foreground">Follow this account and wait for approval to see its posts and lists.</p></div>
+        ) : userPosts.length === 0 ? (
           <div className="col-span-full rounded-[24px] border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
             No posts published yet. Use the Create button above to share your first visual.
           </div>
@@ -388,6 +406,8 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
           ))
         )}
       </div>
+      {activeListModal === "followers" && <ProfileListModal title="Followers" rows={followersQuery.data} loading={followersQuery.isLoading} onClose={() => setActiveListModal(null)} onSelectUser={(person) => { window.history.pushState({}, "", `/profile/${person.id}`); window.dispatchEvent(new PopStateEvent("popstate")); }} />}
+      {activeListModal === "following" && <ProfileListModal title="Following" rows={followingQuery.data} loading={followingQuery.isLoading} onClose={() => setActiveListModal(null)} onSelectUser={(person) => { window.history.pushState({}, "", `/profile/${person.id}`); window.dispatchEvent(new PopStateEvent("popstate")); }} />}
     </div>
   );
 }

@@ -1,0 +1,201 @@
+TANRYUGRAM HOSTING AND MIGRATION GUIDE
+====================================
+
+This guide explains how to move the current TanRyuGram source to Hostinger, another Node.js host, or a local computer. The application source is packaged exactly as it exists at the current checkpoint. This guide does not change application code.
+
+IMPORTANT SECURITY RULES
+------------------------
+
+Never upload a real .env file, API key, Firebase private key, Gmail refresh token, database password, JWT secret, Gemini key, Brevo key, or storage credential inside a public ZIP or Git repository. The delivered source archive intentionally excludes private secrets, node_modules, build caches, server logs, Gradle caches, debug keystores, and generated runtime files.
+
+The Gemini API key that was shared during setup should be revoked or rotated in Google AI Studio before using a new host. Create a replacement key with appropriate API restrictions, then set it only as a server-side environment variable named GEMINI_API_KEY.
+
+The migration archive feature inside Creator Studio is separate from this source ZIP. If moving existing user data, export the owner migration archive from Creator Studio and import it only into a controlled destination. Do not email that archive or upload it to an untrusted host.
+
+WHAT IS INCLUDED
+----------------
+
+The ZIP contains the React client, Express/tRPC server, Drizzle schema and migrations, shared types, tests, configuration files, mobile-companion source, generated Android project source excluding build caches and signing keys, and project documentation. It includes package manifests and lock files so dependencies can be installed again on a clean machine.
+
+The ZIP does not include node_modules, dist, .git history, .env files, database data, production logs, S3 or Forge credentials, Firebase service-account values, Gmail tokens, Gemini keys, debug keystores, Gradle build caches, or private user media. Those items must be recreated securely on the destination.
+
+REQUIREMENTS FOR THE WEB SERVER
+--------------------------------
+
+Use Node.js 22 or a compatible current Node.js LTS release. Use pnpm if possible because the project includes pnpm-lock.yaml. The server also needs a MySQL-compatible database such as MySQL 8, MariaDB where compatible, or TiDB, and a persistent object-storage service for media. The application uses the configured Forge/S3-compatible storage helpers; a new host must provide equivalent storage configuration or retain the existing storage service.
+
+A production deployment needs HTTPS, a long-running Node.js process, WebSocket support for realtime features, enough memory for the build, a database connection, file/media storage, and outbound HTTPS access for email, Gemini, Firebase, and other configured services. A normal shared hosting plan that only serves PHP files is not suitable for the complete application.
+
+HOSTINGER: WHICH PLAN TO USE
+----------------------------
+
+A Hostinger shared/PHP-only plan is not enough for the full TanRyuGram server. Use a Hostinger VPS or a Hostinger plan that explicitly supports a long-running Node.js application, reverse proxying, WebSockets, and a MySQL-compatible database. If the plan cannot run Node.js continuously, it can host only static frontend files and will not support authentication, messaging, calls, uploads, or the server API.
+
+For a Hostinger VPS, create an Ubuntu server, assign a static public IPv4 address, and install Node.js 22, pnpm, Nginx, Git or an upload method, and MySQL if the database will run on that VPS. A managed external MySQL provider and an S3-compatible media provider are also acceptable and often safer than storing large media on the application disk.
+
+HOSTINGER VPS BASIC SETUP
+-------------------------
+
+1. Create the VPS and record its public IP address. Enable the provider firewall for SSH on port 22 and HTTPS on port 443. Do not expose the database port publicly unless absolutely necessary; allow it only from the application server or trusted administration IPs.
+
+2. Connect over SSH as the provider’s initial user, create a separate deployment user, and use SSH keys rather than a password. Update the operating system packages.
+
+3. Install Node.js 22 and pnpm. Verify with: node --version, pnpm --version, and npm --version.
+
+4. Upload or clone the ZIP contents into a directory such as /var/www/tanryugram. Do not upload node_modules or dist from another computer.
+
+5. Run pnpm install --frozen-lockfile. If the host does not have enough memory for the build, build on a larger machine and copy only the generated deployment files, but keep the source archive separately for maintenance.
+
+6. Create the required environment variables listed below. Store them in the host’s protected environment manager or a root-readable file outside the public web directory. Set file permissions so normal website visitors cannot read them.
+
+7. Run the database migrations only after DATABASE_URL points to the destination database and a backup exists. Prefer applying the existing migration files with the project’s Drizzle migration command. Do not run destructive SQL and do not point a new deployment at production data until the connection has been checked.
+
+8. Build with pnpm run build. Start with NODE_ENV=production pnpm run start or node dist/index.js, depending on the host process manager. The application must listen on the port supplied by the environment; do not hardcode a public port.
+
+9. Use a process manager such as systemd or PM2 so the server restarts after a crash or reboot. Configure it to run the production start command from the project directory and to load the protected environment variables.
+
+10. Put Nginx in front of Node. Proxy HTTPS requests and WebSocket upgrade requests to the local Node port. Enable the site only after the domain DNS points to the VPS and an SSL certificate has been installed.
+
+NGINX REVERSE PROXY CONCEPT
+---------------------------
+
+The Nginx virtual host should proxy the normal HTTPS traffic to the local Node process and preserve the Host, X-Forwarded-For, X-Forwarded-Proto, Upgrade, and Connection headers. The exact local port can be 3000 or another provider-assigned port; the application must read its port from the environment. The WebSocket upgrade headers are important for realtime messaging and call signaling.
+
+Do not copy a random Nginx configuration from an untrusted website. Use the provider’s current Ubuntu/Nginx documentation, validate the configuration with nginx -t, then reload Nginx. Use a real TLS certificate such as Let’s Encrypt and force HTTPS after confirming the application and WebSockets work.
+
+DOMAIN AND DNS BINDING
+----------------------
+
+1. Register or use a domain that you control.
+
+2. In the domain registrar DNS panel, create an A record for the root domain pointing to the VPS public IP. Create a CNAME record for www pointing to the root domain if desired. If IPv6 is configured, add an AAAA record only when the server is reachable over IPv6.
+
+3. Wait for DNS propagation and verify with nslookup or dig from another network.
+
+4. Configure the same domain in the Nginx server_name field and in any application callback or allowed-origin configuration required by your authentication, email, Firebase, or payment providers.
+
+5. Install HTTPS before allowing users to sign in. Update Firebase authorized domains and any OAuth or email provider settings with the final HTTPS domain. Never use HTTP for production authentication or password recovery.
+
+REQUIRED SERVER ENVIRONMENT VARIABLES
+-------------------------------------
+
+Set only the variables required by the features you enable. Values below are names, not example secrets.
+
+Core and database:
+DATABASE_URL=MySQL-compatible connection string for the destination database
+JWT_SECRET=long random secret used to sign sessions; generate a new one for a new host
+NODE_ENV=production
+PORT=provider-assigned internal Node port
+
+Owner and application identity:
+VITE_APP_ID=application identifier if required by the current runtime
+OWNER_OPEN_ID=the configured owner identity used by owner-only Creator Studio checks
+OWNER_NAME=display name for the owner where required
+
+Storage and media:
+BUILT_IN_FORGE_API_URL=storage/Forge API base URL used by server storage helpers
+BUILT_IN_FORGE_API_KEY=server-only storage/Forge credential
+VITE_FRONTEND_FORGE_API_URL=frontend Forge URL only if the current client requires it
+VITE_FRONTEND_FORGE_API_KEY=frontend-safe Forge credential only if explicitly required by the client
+
+Email and recovery, only when used:
+BREVO_API_KEY=Brevo server credential
+BREVO_SENDER_EMAIL=verified sender address
+BREVO_SENDER_NAME=sender name
+MAIL_API_URL=Apps Script or alternate mail relay endpoint
+MAIL_API_SECRET=server-only relay secret
+GMAIL_CLIENT_ID=Gmail OAuth client ID if Gmail fallback is enabled
+GMAIL_CLIENT_SECRET=Gmail OAuth client secret if Gmail fallback is enabled
+GMAIL_REFRESH_TOKEN=server-only Gmail refresh token
+GMAIL_SENDER_EMAIL=verified Gmail sender address
+
+Gemini Creator Studio assistant:
+GEMINI_API_KEY=restricted Gemini API key stored server-side only
+GEMINI_MODEL=optional model name supported by the key and account
+
+Firebase and mobile calls, only when used:
+FIREBASE_PROJECT_ID=Firebase project ID
+FIREBASE_CLIENT_EMAIL=Firebase service-account client email
+FIREBASE_PRIVATE_KEY=Firebase service-account private key with correct newline formatting
+
+Other integrations, only when used:
+STRIPE_SECRET_KEY=server-only Stripe secret if payments are enabled
+STRIPE_WEBHOOK_SECRET=Stripe webhook signing secret if payments are enabled
+VITE_ANALYTICS_ENDPOINT=analytics endpoint if analytics are enabled
+VITE_ANALYTICS_WEBSITE_ID=analytics website identifier if analytics are enabled
+
+Do not copy the existing production values blindly. Rotate JWT_SECRET, Gemini, Gmail, Brevo, Firebase, storage, and payment credentials when moving to a new host unless you intentionally keep the same trusted secret-management system.
+
+DATABASE SETUP
+--------------
+
+Create an empty MySQL-compatible database and a restricted application user. Record the connection string securely as DATABASE_URL. Confirm that the database user can create and alter the application tables required by the migrations, but do not give the website account unnecessary administrative privileges.
+
+From the project directory, install dependencies and review the migration files. Apply the existing migrations using the project’s Drizzle workflow after checking the destination connection. Make a database backup before every migration. Never import an old database dump and a full migration archive into the same destination unless you understand the duplicate and relationship implications.
+
+The full user migration archive is intended for moving application history, not for copying password hashes or session credentials. Imported accounts require secure credential reactivation or password reset.
+
+MEDIA STORAGE SETUP
+-------------------
+
+The application does not treat the database as the location for file bytes. User photos, post media, group media, avatars, and attachments need the configured storage service. If the new host cannot reach the current Forge/S3-compatible storage endpoint, configure a compatible replacement and update the server-side storage integration through a reviewed code/configuration change. Do not put media in client/public or a temporary server folder.
+
+Before opening registration, test uploads and downloads using two separate accounts. Verify that a non-owner can view another user’s profile and post media. If media URLs still point to the old domain or private local paths, stop and repair the storage configuration before importing users.
+
+EMAIL SETUP
+-----------
+
+Choose one verified transactional sender. For Brevo, verify the sender and authorize the current server IP if the provider requires IP allowlisting. For Gmail or Apps Script, deploy the relay privately, validate a shared secret, enforce cooldowns and quotas, and never return verification codes in API responses or browser errors. Keep email delivery and signup verification switches disabled until the new sender has been tested from the new server.
+
+For a custom domain, configure SPF, DKIM, and DMARC according to the provider’s current instructions. Test signup verification and password reset to controlled inboxes, including spam placement. Never use email credentials in client-side code.
+
+GEMINI SETUP
+------------
+
+Create or rotate the Gemini API key in Google AI Studio. Restrict it to the required Gemini API, add usage limits where available, and store it as GEMINI_API_KEY in the server environment only. The Creator Studio Gemini panel is owner-only and uses bounded conversation history. It can chat, produce proposals, and apply only supported safe settings after confirmation; arbitrary code changes still require reviewed engineering work.
+
+FIREBASE AND ANDROID SETUP
+--------------------------
+
+The mobile-companion directory contains Expo/React Native source and an Android project. Install the mobile dependencies from mobile-companion/package.json. Do not include or reuse the debug.keystore from the archive for a public release. For a release APK or AAB, create a new signing key, keep it backed up privately, and configure Firebase with the correct application ID and SHA fingerprints.
+
+Place the correct google-services.json in the Android project only on the private build machine or secure CI system. Do not commit it if it contains sensitive project configuration that your policy requires keeping private. Confirm Firebase Cloud Messaging, notification permissions, full-screen call notification settings, microphone permission, camera permission, and production server URLs before distributing an APK.
+
+To build locally, install Android Studio and the Android SDK, open mobile-companion/android, sync Gradle, and run the debug build. For a release build, configure signing credentials and use the current Android Studio/Gradle documentation. The delivered source includes the native project, but it does not include private signing keys.
+
+LOCAL DEVELOPMENT
+-----------------
+
+On Windows, install Node.js 22, pnpm, Git, MySQL or use a managed database, and Android Studio only if building the mobile app. Extract the ZIP into a short path with no unusual characters. Open PowerShell in the project directory.
+
+Run pnpm install --frozen-lockfile. Create the required environment variables in a secure local environment file that is never uploaded. Run pnpm run dev for development. The web application normally runs on the configured local port. Use pnpm exec tsc --noEmit for TypeScript validation, pnpm test for the full local suite, and pnpm run build for the production build.
+
+For the mobile companion, change into mobile-companion, install its dependencies, and use its documented Expo/Android commands. The mobile app must point to an HTTPS reachable server for real-device testing; localhost on the development computer is not the same as localhost on a phone.
+
+ALTERNATIVE HOSTING OPTIONS
+---------------------------
+
+A managed Node.js host can be simpler than a VPS if it supports the application’s long-running server, WebSockets, environment secrets, MySQL-compatible database, persistent media storage, and outbound API connections. Examples include providers that explicitly support Node.js services and managed databases. Review current pricing and limitations directly with the provider because plans change.
+
+A small VPS from Hostinger, Hetzner, DigitalOcean, or another reputable provider offers more control and usually works well with Nginx, systemd, MySQL, and object storage. It also requires you to handle operating-system updates, firewalls, backups, monitoring, SSL, and incident response.
+
+A purely static host can serve the compiled frontend only. It cannot replace the TanRyuGram server, database, media storage, authentication, messaging, call signaling, email relay, or push infrastructure. Do not choose a static-only plan for the complete platform.
+
+BACKUPS AND ROLLBACK
+--------------------
+
+Before changing hosts, make at least two encrypted backups: a database backup and a private media/storage backup or provider-side replication. Keep the current Manus deployment available until the new host passes authentication, media, email, messaging, group, and call tests. Do not delete the old deployment immediately after DNS changes.
+
+Use a staging hostname first. Test owner-only Creator Studio access, a normal user account, signup, login, recovery, post media, profile media, direct messaging, groups, call signaling, push registration, and Android notifications. Only then switch the production DNS record.
+
+FINAL CUTOVER CHECKLIST
+-----------------------
+
+Confirm that DNS points to the new host and HTTPS is valid. Confirm that the server process starts after reboot. Confirm the database migrations are applied. Confirm storage uploads and cross-account downloads. Confirm signup and reset email delivery. Confirm Gemini is server-only and owner-only. Confirm the mobile build uses the new HTTPS endpoint. Confirm WebSockets and calls. Confirm backups and monitoring. Keep the old domain or deployment ready for rollback until the new host has been stable for several days.
+
+WHAT TO DO IF HOSTINGER SHARED HOSTING CANNOT RUN THIS
+-------------------------------------------------------
+
+Do not try to force the complete application into a PHP-only shared plan. Keep the web app on a Node-capable host or VPS and use the domain’s DNS to point to it. A shared Hostinger plan may still be useful for a simple landing page, but the TanRyuGram API, database, media storage, calls, and authentication must remain on infrastructure that supports the required runtime.
+
+END OF GUIDE
