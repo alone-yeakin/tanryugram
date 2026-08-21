@@ -25,16 +25,27 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("Tanryugram beta media policy", () => {
   it("keeps photos enabled and blocks videos by default", async () => {
-    vi.spyOn(db, "getMediaUploadPolicy").mockResolvedValue({ photosEnabled: true, videosEnabled: false } as any);
+    vi.spyOn(db, "getMediaUploadPolicy").mockResolvedValue({ photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false } as any);
     const caller = appRouter.createCaller(createContext());
     const image = Buffer.from("small-photo").toString("base64");
     await expect(caller.media.uploadBase64({ fileName: "photo.jpg", base64Data: image, contentType: "image/jpeg" })).resolves.toBeDefined();
     await expect(caller.media.uploadBase64({ fileName: "clip.mp4", base64Data: image, contentType: "video/mp4" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  it("keeps profile-photo uploads independent from post-photo publishing", async () => {
+    vi.spyOn(db, "getMediaUploadPolicy").mockResolvedValue({ photosEnabled: false, profilePhotosEnabled: true, videosEnabled: false } as any);
+    const caller = appRouter.createCaller(createContext());
+    const image = Buffer.from("profile-photo").toString("base64");
+    await expect(caller.media.uploadBase64({ fileName: "avatar.jpg", base64Data: image, contentType: "image/jpeg", purpose: "profile" })).resolves.toBeDefined();
+    await expect(caller.media.uploadBase64({ fileName: "post.jpg", base64Data: image, contentType: "image/jpeg", purpose: "post" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    vi.spyOn(db, "getMediaUploadPolicy").mockResolvedValue({ photosEnabled: true, profilePhotosEnabled: false, videosEnabled: false } as any);
+    await expect(caller.media.uploadBase64({ fileName: "avatar-locked.jpg", base64Data: image, contentType: "image/jpeg", purpose: "profile" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   it("does not expose upload-policy mutation to ordinary accounts", async () => {
     const caller = appRouter.createCaller(createContext());
-    await expect(caller.admin.setUploadPolicy({ photosEnabled: false, videosEnabled: false })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.setUploadPolicy({ photosEnabled: false, profilePhotosEnabled: false, videosEnabled: false })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("uses follow-back wording and notifies reactions", async () => {

@@ -45,24 +45,25 @@ export async function getNotifications(userId: number) { const db = await getDb(
 export async function getUnreadNotificationCount(userId: number) { const db = await getDb(); if (!db) return 0; const r = await db.select({ count: sql<number>`COUNT(*)` }).from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.isRead, false))); return Number(r[0]?.count ?? 0); }
 export async function getMediaUploadPolicy() {
   const db = await getDb();
-  if (!db) return { photosEnabled: true, videosEnabled: false };
+  if (!db) return { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
   const existing = (await db.select().from(mediaUploadPolicy).limit(1))[0];
   if (existing) return existing;
-  await db.insert(mediaUploadPolicy).values({ photosEnabled: true, videosEnabled: false });
-  return (await db.select().from(mediaUploadPolicy).limit(1))[0] ?? { photosEnabled: true, videosEnabled: false };
+  await db.insert(mediaUploadPolicy).values({ photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false });
+  return (await db.select().from(mediaUploadPolicy).limit(1))[0] ?? { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
 }
-export async function updateMediaUploadPolicy(userId: number, input: { photosEnabled?: boolean; videosEnabled?: boolean }) {
+export async function updateMediaUploadPolicy(userId: number, input: { photosEnabled?: boolean; profilePhotosEnabled?: boolean; videosEnabled?: boolean }) {
   const db = await getDb();
-  if (!db) return { photosEnabled: input.photosEnabled ?? true, videosEnabled: input.videosEnabled ?? false };
+  if (!db) return { photosEnabled: input.photosEnabled ?? true, profilePhotosEnabled: input.profilePhotosEnabled ?? true, videosEnabled: input.videosEnabled ?? false };
   const existing = (await db.select().from(mediaUploadPolicy).limit(1))[0];
   if (existing) {
     await db.update(mediaUploadPolicy).set({
       ...(input.photosEnabled !== undefined ? { photosEnabled: input.photosEnabled } : {}),
+      ...(input.profilePhotosEnabled !== undefined ? { profilePhotosEnabled: input.profilePhotosEnabled } : {}),
       ...(input.videosEnabled !== undefined ? { videosEnabled: input.videosEnabled } : {}),
       updatedBy: userId,
     }).where(eq(mediaUploadPolicy.id, existing.id));
   } else {
-    await db.insert(mediaUploadPolicy).values({ photosEnabled: input.photosEnabled ?? true, videosEnabled: input.videosEnabled ?? false, updatedBy: userId });
+    await db.insert(mediaUploadPolicy).values({ photosEnabled: input.photosEnabled ?? true, profilePhotosEnabled: input.profilePhotosEnabled ?? true, videosEnabled: input.videosEnabled ?? false, updatedBy: userId });
   }
   return getMediaUploadPolicy();
 }

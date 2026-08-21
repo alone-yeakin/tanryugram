@@ -3,6 +3,7 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, decimal 
 export const mediaUploadPolicy = mysqlTable("mediaUploadPolicy", {
   id: int("id").autoincrement().primaryKey(),
   photosEnabled: boolean("photosEnabled").default(true).notNull(),
+  profilePhotosEnabled: boolean("profilePhotosEnabled").default(true).notNull(),
   videosEnabled: boolean("videosEnabled").default(false).notNull(),
   updatedBy: int("updatedBy"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

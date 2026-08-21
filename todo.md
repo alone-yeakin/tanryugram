@@ -534,3 +534,10 @@
 - [x] Profile privacy: add account settings to show or hide follower and following lists
 - [x] Private profiles: add a lock toggle and route new follows into approval requests
 - [x] Profile validation: preserve all photo/media paths, add regression tests, verify mobile/desktop flows, and publish
+
+- [ ] Creator Studio: add a separate owner-only profile-photo upload switch independent from post publishing
+- [ ] Profile photos: allow profile-picture uploads when post/photo publishing is disabled, with server-side enforcement
+- [ ] Profile photo validation: add regression tests and preserve existing media storage/rendering paths
+- [ ] Profile photo release: run build and preview verification and publish the update
+
+- [x] Independent profile-photo upload control: server enforcement, Creator Studio toggle, Account Settings behavior, and regression coverage

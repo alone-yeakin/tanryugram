@@ -81,7 +81,7 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const users = usersQuery.data || [];
   const posts = postsQuery.data || [];
   const applications = applicationsQuery.data || [];
-  const uploadPolicy = uploadPolicyQuery.data || { photosEnabled: true, videosEnabled: false };
+  const uploadPolicy = uploadPolicyQuery.data || { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
   const emailSettings = emailSettingsQuery.data || { emailDeliveryEnabled: true, signupVerificationEnabled: false, appScriptLoginEnabled: false, appScriptResetEnabled: false };
   const recoverySettings = recoverySettingsQuery.data || { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
   const [whatsappNumber, setWhatsappNumber] = useState(recoverySettings.whatsappSupportNumber);
@@ -92,7 +92,7 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const [geminiRequest, setGeminiRequest] = useState("");
   const [geminiProposal, setGeminiProposal] = useState<any | null>(null);
   const [geminiChatMessages, setGeminiChatMessages] = useState<GeminiChatMessage[]>([{ role: "assistant", content: "I’m your private TanRyuGram Creator Studio assistant. Ask me about features, settings, troubleshooting, or a safe implementation plan. I will explain what needs review and will never claim that source code was changed unless it actually was." }]);
-  const updateUploadPolicy = (next: { photosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy) => { utils.admin.uploadPolicy.setData(undefined, policy); utils.media.policy.setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error) => toast.error(error.message) });
+  const updateUploadPolicy = (next: { photosEnabled: boolean; profilePhotosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy) => { utils.admin.uploadPolicy.setData(undefined, policy); utils.media.policy.setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error) => toast.error(error.message) });
   const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.emailSettings.setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error) => toast.error(error.message) });
   const updateRecoverySettings = (next: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) => setRecoverySettingsMutation.mutate(next, { onSuccess: (settings) => { utils.admin.recoverySettings.setData(undefined, settings); setWhatsappNumber(settings.whatsappSupportNumber); utils.recovery.settings.invalidate(); toast.success("Recovery support settings updated"); }, onError: (error) => toast.error(error.message) });
 
@@ -208,18 +208,22 @@ export function AdminView({ onTip }: { onTip: () => void }) {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600">Storage protection</p>
             <h3 className="mt-1 font-semibold">Upload controls</h3>
-            <p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted-foreground">Choose which media types the beta accepts. Photos are enabled by default for everyone; video stays paused until storage capacity improves. Changes apply to posts, stories, and media uploads.</p>
+            <p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted-foreground">Choose which media types the beta accepts. Post publishing and profile-photo uploads are controlled independently; video stays paused until storage capacity improves.</p>
           </div>
           <span className="w-fit rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">Owner only</span>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={() => updateUploadPolicy({ photosEnabled: !uploadPolicy.photosEnabled, videosEnabled: uploadPolicy.videosEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${uploadPolicy.photosEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-border bg-muted/40"}`}>
+          <button type="button" onClick={() => updateUploadPolicy({ photosEnabled: !uploadPolicy.photosEnabled, profilePhotosEnabled: uploadPolicy.profilePhotosEnabled, videosEnabled: uploadPolicy.videosEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${uploadPolicy.photosEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-border bg-muted/40"}`}>
             <span><span className="block text-sm font-semibold">Photo uploads</span><span className="mt-1 block text-[11px] text-muted-foreground">JPG, PNG, WEBP, and GIF · up to 10 MB</span></span>
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${uploadPolicy.photosEnabled ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"}`}>{uploadPolicy.photosEnabled ? "ON" : "OFF"}</span>
           </button>
-          <button type="button" onClick={() => updateUploadPolicy({ photosEnabled: uploadPolicy.photosEnabled, videosEnabled: !uploadPolicy.videosEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${uploadPolicy.videosEnabled ? "border-amber-300 bg-amber-500/10" : "border-border bg-muted/40"}`}>
+          <button type="button" onClick={() => updateUploadPolicy({ photosEnabled: uploadPolicy.photosEnabled, profilePhotosEnabled: uploadPolicy.profilePhotosEnabled, videosEnabled: !uploadPolicy.videosEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${uploadPolicy.videosEnabled ? "border-amber-300 bg-amber-500/10" : "border-border bg-muted/40"}`}>
             <span><span className="block text-sm font-semibold">Video uploads</span><span className="mt-1 block text-[11px] text-muted-foreground">MP4, WEBM, and MOV · up to 20 MB</span></span>
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${uploadPolicy.videosEnabled ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground"}`}>{uploadPolicy.videosEnabled ? "ON" : "OFF"}</span>
+          </button>
+          <button type="button" onClick={() => updateUploadPolicy({ photosEnabled: uploadPolicy.photosEnabled, profilePhotosEnabled: !uploadPolicy.profilePhotosEnabled, videosEnabled: uploadPolicy.videosEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${uploadPolicy.profilePhotosEnabled ? "border-sky-300 bg-sky-500/10" : "border-border bg-muted/40"}`}>
+            <span><span className="block text-sm font-semibold">Profile photo uploads</span><span className="mt-1 block text-[11px] text-muted-foreground">Allow users to change their avatar even when post photos are off.</span></span>
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${uploadPolicy.profilePhotosEnabled ? "bg-sky-600 text-white" : "bg-muted text-muted-foreground"}`}>{uploadPolicy.profilePhotosEnabled ? "ON" : "OFF"}</span>
           </button>
         </div>
       </div>
@@ -534,12 +538,12 @@ export function AccountSettings({ user, onClose }: { user: any; onClose: () => v
 
   const base64Mutation = trpc.media.uploadBase64.useMutation();
   const mediaPolicyQuery = trpc.media.policy.useQuery();
-  const mediaPolicy = mediaPolicyQuery.data || { photosEnabled: true, videosEnabled: false };
+  const mediaPolicy = mediaPolicyQuery.data || { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!mediaPolicy.photosEnabled) { toast.error("Photo uploads are temporarily paused by the owner"); return; }
+    if (!mediaPolicy.profilePhotosEnabled) { toast.error("Profile photo uploads are temporarily paused by the owner"); return; }
     const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     if (!allowedTypes.includes(file.type) || file.size > 10 * 1024 * 1024) { toast.error("Choose a JPG, PNG, WEBP, or GIF photo up to 10 MB"); return; }
     try {
@@ -548,7 +552,7 @@ export function AccountSettings({ user, onClose }: { user: any; onClose: () => v
       reader.onload = async () => {
         try {
           const base64Data = reader.result as string;
-          const res = await base64Mutation.mutateAsync({ fileName: file.name, base64Data, contentType: file.type || "image/jpeg" });
+          const res = await base64Mutation.mutateAsync({ fileName: file.name, base64Data, contentType: file.type || "image/jpeg", purpose: "profile" });
           await updateMutation.mutateAsync({ avatarUrl: res.url });
           setAvatarUrl(res.url);
           await utils.auth.me.invalidate();
@@ -625,9 +629,9 @@ export function AccountSettings({ user, onClose }: { user: any; onClose: () => v
             <div>
               <label className="cursor-pointer rounded-xl bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:opacity-90">
                 {uploading ? "Uploading..." : "Change photo"}
-                <input type="file" accept={mediaPolicy.photosEnabled ? "image/jpeg,image/png,image/webp,image/gif" : ""} disabled={!mediaPolicy.photosEnabled || uploading} onChange={handleFileChange} className="hidden" />
+                <input type="file" accept={mediaPolicy.profilePhotosEnabled ? "image/jpeg,image/png,image/webp,image/gif" : ""} disabled={!mediaPolicy.profilePhotosEnabled || uploading} onChange={handleFileChange} className="hidden" />
               </label>
-              <p className="mt-1 text-[10px] text-muted-foreground">{mediaPolicy.photosEnabled ? "Secure photo storage · JPG, PNG, WEBP, or GIF up to 10 MB" : "Photo uploads are temporarily paused by the owner"}</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">{mediaPolicy.profilePhotosEnabled ? "Secure profile photo storage · JPG, PNG, WEBP, or GIF up to 10 MB" : "Profile photo uploads are temporarily paused by the owner"}</p>
             </div>
           </div>
           <div>

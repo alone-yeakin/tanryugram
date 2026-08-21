@@ -1,0 +1,1 @@
+ALTER TABLE `mediaUploadPolicy` ADD `profilePhotosEnabled` boolean DEFAULT true NOT NULL;
