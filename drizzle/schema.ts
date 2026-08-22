@@ -9,6 +9,31 @@ export const mediaUploadPolicy = mysqlTable("mediaUploadPolicy", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const userMediaPermissions = mysqlTable("userMediaPermissions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  postsEnabled: boolean("postsEnabled").default(true).notNull(),
+  photosEnabled: boolean("photosEnabled").default(true).notNull(),
+  videosEnabled: boolean("videosEnabled").default(false).notNull(),
+  reelsEnabled: boolean("reelsEnabled").default(false).notNull(),
+  storiesEnabled: boolean("storiesEnabled").default(true).notNull(),
+  updatedBy: int("updatedBy"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const contentReports = mysqlTable("contentReports", {
+  id: int("id").autoincrement().primaryKey(),
+  reporterId: int("reporterId").notNull(),
+  targetType: mysqlEnum("targetType", ["account", "post", "video", "reel"]).notNull(),
+  targetId: int("targetId").notNull(),
+  reason: mysqlEnum("reason", ["pornography", "child_abuse", "dangerous", "harassment", "spam", "other"]).notNull(),
+  details: text("details"),
+  status: mysqlEnum("status", ["auto_hidden", "pending", "reviewed", "dismissed"]).default("pending").notNull(),
+  reviewedBy: int("reviewedBy"),
+  reviewedAt: timestamp("reviewedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export const emailDeliverySettings = mysqlTable("emailDeliverySettings", {
   id: int("id").autoincrement().primaryKey(),
   emailDeliveryEnabled: boolean("emailDeliveryEnabled").default(true).notNull(),
@@ -77,6 +102,7 @@ export const users = mysqlTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   isBanned: boolean("isBanned").default(false).notNull(),
+  contentHidden: boolean("contentHidden").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -94,6 +120,7 @@ export const posts = mysqlTable("posts", {
   taggedUsers: text("taggedUsers"),
   likesCount: int("likesCount").default(0).notNull(),
   commentsCount: int("commentsCount").default(0).notNull(),
+  isHidden: boolean("isHidden").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -387,6 +414,8 @@ export type InsertPost = typeof posts.$inferInsert;
 export type Comment = typeof comments.$inferSelect;
 export type Like = typeof likes.$inferSelect;
 export type Save = typeof saves.$inferSelect;
+export type UserMediaPermission = typeof userMediaPermissions.$inferSelect;
+export type ContentReport = typeof contentReports.$inferSelect;
 export type Follow = typeof follows.$inferSelect;
 export type Story = typeof stories.$inferSelect;
 export type Message = typeof messages.$inferSelect;

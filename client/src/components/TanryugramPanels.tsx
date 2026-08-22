@@ -44,6 +44,8 @@ export function LoginPanel({ onLogin }: { onLogin: () => void }) {
 export function AdminView({ onTip }: { onTip: () => void }) {
   const usersQuery = trpc.admin.users.useQuery();
   const postsQuery = trpc.admin.posts.useQuery();
+  const mediaPermissionsQuery = trpc.admin.mediaPermissions.useQuery();
+  const reportsQuery = trpc.admin.reports.useQuery();
   const verifyMutation = trpc.admin.verifyUser.useMutation();
   const setBadgeMutation = trpc.admin.setBadge.useMutation();
   const setCreatorMutation = trpc.admin.setCreator.useMutation();
@@ -53,6 +55,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const reviewBadgeMutation = trpc.admin.reviewBadge.useMutation();
   const banUserMutation = trpc.admin.banUser.useMutation();
   const setRoleMutation = trpc.admin.setRole.useMutation();
+  const setUserMediaPermissionsMutation = trpc.admin.setUserMediaPermissions.useMutation();
+  const reviewReportMutation = trpc.admin.reviewReport.useMutation();
   const deletePostMutation = trpc.admin.deletePost.useMutation();
   const applicationsQuery = trpc.admin.badgeApplications.useQuery();
   const uploadPolicyQuery = trpc.admin.uploadPolicy.useQuery();
@@ -73,8 +77,6 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const geminiChatMutation = trpc.admin.geminiChat.useMutation();
   const utils = trpc.useUtils();
 
-  const [instagramConnected, setInstagramConnected] = useState(false);
-  const [instagramUser, setInstagramUser] = useState("");
   const [followerOverrides, setFollowerOverrides] = useState<Record<number, string>>({});
   const [activeProviderModal, setActiveProviderModal] = useState<"supabase" | "firebase" | "vercel" | null>(null);
   const [providerConfigUrl, setProviderConfigUrl] = useState("");
@@ -82,6 +84,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const users = usersQuery.data || [];
   const posts = postsQuery.data || [];
   const applications = applicationsQuery.data || [];
+  const mediaPermissions = mediaPermissionsQuery.data || [];
+  const reports = reportsQuery.data || [];
   const uploadPolicy = uploadPolicyQuery.data || { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
   const emailSettings = emailSettingsQuery.data || { emailDeliveryEnabled: true, signupVerificationEnabled: false, appScriptLoginEnabled: false, appScriptResetEnabled: false };
   const recoverySettings = recoverySettingsQuery.data || { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
@@ -135,15 +139,6 @@ export function AdminView({ onTip }: { onTip: () => void }) {
     geminiApplyMutation.mutate({ actions: geminiProposal.safeActions }, { onSuccess: (result) => { setGeminiProposal(null); utils.admin.emailSettings.invalidate(); utils.admin.uploadPolicy.invalidate(); utils.media.policy.invalidate(); toast.success("Approved settings applied", { description: `${result.applied.length} safe change(s) were applied.` }); }, onError: (error) => toast.error(error.message) });
   };
 
-  const handleInstagramConnect = () => {
-    if (!instagramUser.trim()) {
-      toast.error("Enter a valid Instagram username or handle");
-      return;
-    }
-    setInstagramConnected(true);
-    toast.success("Successfully linked Instagram account", { description: `Syncing reels & explore feed from @${instagramUser.trim()} via official API.` });
-  };
-
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 pb-8">
       <div className="relative overflow-hidden rounded-[32px] border border-violet-200/70 bg-gradient-to-br from-violet-600 via-fuchsia-600 to-slate-950 p-5 text-white shadow-xl shadow-violet-500/10 sm:p-7">
@@ -158,23 +153,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
 
         <div className="relative mt-6 rounded-2xl border border-white/15 bg-black/15 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold text-white">Official Instagram Explore Integration</p>
-              <p className="text-[11px] text-white/65">Connect via official API authorization to pull reels and media directly into Explore.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {instagramConnected ? (
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600">Connected (@{instagramUser})</span>
-                  <button onClick={() => setInstagramConnected(false)} className="rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/10">Unlink</button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <input value={instagramUser} onChange={(e) => setInstagramUser(e.target.value)} placeholder="Instagram handle" className="h-9 rounded-xl border border-border bg-card px-3 text-xs outline-none" />
-                  <button onClick={handleInstagramConnect} className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-violet-700">Connect Instagram</button>
-                </div>
-              )}
-            </div>
+            <div><p className="text-xs font-semibold text-white">TanRyuGram Reels</p><p className="text-[11px] text-white/65">A privacy-first 9:16 short-video surface built from TanRyuGram uploads. No Instagram login, scraping, or user-data sync is used.</p></div>
+            <span className="w-fit rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white/80">Empty until creators upload</span>
           </div>
         </div>
       </div>
@@ -227,6 +207,12 @@ export function AdminView({ onTip }: { onTip: () => void }) {
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${uploadPolicy.profilePhotosEnabled ? "bg-sky-600 text-white" : "bg-muted text-muted-foreground"}`}>{uploadPolicy.profilePhotosEnabled ? "ON" : "OFF"}</span>
           </button>
         </div>
+      </div>
+
+      <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500">Per-account access</p><h3 className="mt-1 font-semibold">Posting permissions</h3><p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted-foreground">Grant or pause photo, video, Reel, story, or general post access for individual accounts. These are owner-granted controls only; no payment details or payment screen are stored.</p></div><span className="w-fit rounded-full bg-violet-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-600">Owner only</span></div>
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">{users.map((u: any) => { const p = mediaPermissions.find((row: any) => row.userId === u.id) || { postsEnabled: true, photosEnabled: true, videosEnabled: false, reelsEnabled: false, storiesEnabled: true }; const controls = [["postsEnabled", "Posts"], ["photosEnabled", "Photos"], ["videosEnabled", "Videos"], ["reelsEnabled", "Reels"], ["storiesEnabled", "Stories"]] as const; return <div key={`permissions-${u.id}`} className="rounded-2xl border border-border/70 bg-muted/30 p-4"><div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-semibold">{u.name || u.username || "User"}</p><p className="truncate text-[10px] text-muted-foreground">{u.email || `@${u.username || "member"}`}</p></div><span className="rounded-full bg-background px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Manual access</span></div><div className="mt-3 flex flex-wrap gap-2">{controls.map(([field, label]) => <button key={field} type="button" onClick={() => setUserMediaPermissionsMutation.mutate({ userId: u.id, [field]: !p[field] }, { onSuccess: () => { utils.admin.mediaPermissions.invalidate(); toast.success(`${label} access ${p[field] ? "paused" : "granted"}`); }, onError: (error) => toast.error(error.message) })} className={`min-h-10 rounded-xl px-3 py-2 text-[10px] font-semibold transition ${p[field] ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border border-border bg-card text-muted-foreground"}`}>{label}: {p[field] ? "ON" : "OFF"}</button>)}</div></div>; })}</div>
+        {users.length === 0 && <p className="mt-4 rounded-2xl border border-dashed border-border p-4 text-center text-[11px] text-muted-foreground">User permissions will appear after accounts are loaded.</p>}
       </div>
 
       <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
@@ -477,6 +463,11 @@ export function AdminView({ onTip }: { onTip: () => void }) {
           <div className="mt-5 flex-1 space-y-3">
             {applications.length === 0 ? <div className="flex h-full min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border p-6 text-center"><div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-600">✓</div><p className="text-sm font-semibold">Review queue is clear</p><p className="mt-1 max-w-xs text-[11px] leading-5 text-muted-foreground">New badge requests will appear here with the requested style, reason, and approval controls.</p></div> : applications.map((item: any) => <div key={item.application.id} className="rounded-2xl border border-border/60 bg-muted/40 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="text-xs font-semibold">{item.user.name || item.user.username || "User"} requested <span className={item.application.requestedBadge === "blue" ? "text-blue-600" : "text-foreground"}>{item.application.requestedBadge} badge</span></p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">{item.application.reason || "No reason provided."}</p></div><span className="w-fit rounded-full bg-background px-2 py-1 text-[9px] font-bold uppercase tracking-wide">{item.application.status}</span></div>{item.application.status === "pending" && <div className="mt-4 flex flex-wrap gap-2"><button onClick={() => reviewBadgeMutation.mutate({ applicationId: item.application.id, status: "approved" }, { onSuccess: () => { utils.admin.badgeApplications.invalidate(); utils.admin.users.invalidate(); toast.success("Badge application approved"); } })} className="rounded-xl bg-emerald-500 px-3 py-2 text-[10px] font-semibold text-white transition hover:bg-emerald-600">Approve</button><button onClick={() => reviewBadgeMutation.mutate({ applicationId: item.application.id, status: "rejected" }, { onSuccess: () => { utils.admin.badgeApplications.invalidate(); toast.success("Badge application rejected"); } })} className="rounded-xl border border-border bg-card px-3 py-2 text-[10px] font-semibold transition hover:border-violet-300">Reject</button></div>}</div>)}
           </div>
+        </div>
+
+        <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-rose-500">Safety queue</p><h3 className="mt-1 font-semibold">Reports & automatic hides</h3></div><span className="rounded-full bg-rose-500/10 px-2.5 py-1 text-[9px] font-bold text-rose-600">{reports.filter((item: any) => item.report.status === "pending" || item.report.status === "auto_hidden").length} open</span></div>
+          <div className="mt-4 space-y-3">{reports.length ? reports.map((item: any) => <div key={item.report.id} className="rounded-2xl border border-border/70 bg-muted/30 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold">{item.report.targetType} #{item.report.targetId} · {item.report.reason.replace("_", " ")}</p><p className="mt-1 text-[10px] text-muted-foreground">Reported by {item.reporter?.name || item.reporter?.username || "member"} · {item.report.status.replace("_", " ")}</p>{item.report.details && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{item.report.details}</p>}</div><span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-bold uppercase ${item.report.status === "auto_hidden" ? "bg-rose-500/10 text-rose-600" : "bg-amber-500/10 text-amber-700"}`}>{item.report.status}</span></div>{(item.report.status === "pending" || item.report.status === "auto_hidden") && <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => reviewReportMutation.mutate({ reportId: item.report.id, status: "reviewed" }, { onSuccess: () => { utils.admin.reports.invalidate(); toast.success("Report confirmed"); }, onError: (error) => toast.error(error.message) })} className="min-h-10 rounded-xl bg-rose-600 px-3 py-2 text-[10px] font-semibold text-white">Keep hidden</button><button type="button" onClick={() => reviewReportMutation.mutate({ reportId: item.report.id, status: "dismissed" }, { onSuccess: () => { utils.admin.reports.invalidate(); utils.discovery.feed.invalidate(); utils.discovery.explore.invalidate(); toast.success("Report dismissed and content restored"); }, onError: (error) => toast.error(error.message) })} className="min-h-10 rounded-xl border border-border bg-card px-3 py-2 text-[10px] font-semibold">Dismiss & restore</button></div>}</div>) : <p className="rounded-2xl border border-dashed border-border p-4 text-center text-[11px] text-muted-foreground">No reports yet.</p>}</div>
         </div>
 
         <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">

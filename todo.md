@@ -543,3 +543,11 @@
 - [x] Independent profile-photo upload control: server enforcement, Creator Studio toggle, Account Settings behavior, and regression coverage
 
 - [x] Account Settings avatar improvements: add Remove Photo, upload progress spinner and success toast, and crop-before-save flow with regression coverage
+
+- [x] Explore reels: evaluate and implement a privacy-respecting Instagram-style reels experience without YouTube or unnecessary Instagram user-data access
+
+- [x] Replace YouTube Explore block with an empty native 9:16 TanRyuGram Reels section
+- [x] Add owner-only granular posting permissions for photos, videos, and Reels without payment UI
+- [x] Add account/post/video/Reels reporting with server-side authorization and owner moderation inbox
+- [x] Automatically hide content reported for pornography, child abuse, or dangerous material pending owner review
+- [x] Add moderation regression tests, responsive verification, and production validation
