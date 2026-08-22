@@ -34,6 +34,53 @@ export const contentReports = mysqlTable("contentReports", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const reelSubmissions = mysqlTable("reelSubmissions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  mediaUrl: text("mediaUrl").notNull(),
+  caption: text("caption"),
+  width: int("width").notNull(),
+  height: int("height").notNull(),
+  durationSeconds: int("durationSeconds"),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  reviewNote: text("reviewNote"),
+  reviewedBy: int("reviewedBy"),
+  reviewedAt: timestamp("reviewedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const contentAppeals = mysqlTable("contentAppeals", {
+  id: int("id").autoincrement().primaryKey(),
+  appellantId: int("appellantId").notNull(),
+  targetType: mysqlEnum("targetType", ["account", "post", "video", "reel"]).notNull(),
+  targetId: int("targetId").notNull(),
+  reason: text("reason").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  reviewedBy: int("reviewedBy"),
+  reviewedAt: timestamp("reviewedAt"),
+  response: text("response"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const contentReportRateLimits = mysqlTable("contentReportRateLimits", {
+  id: int("id").autoincrement().primaryKey(),
+  reporterId: int("reporterId").notNull().unique(),
+  windowStartedAt: timestamp("windowStartedAt").notNull(),
+  reportCount: int("reportCount").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const moderationAuditLog = mysqlTable("moderationAuditLog", {
+  id: int("id").autoincrement().primaryKey(),
+  actorId: int("actorId"),
+  action: varchar("action", { length: 64 }).notNull(),
+  targetType: varchar("targetType", { length: 32 }).notNull(),
+  targetId: int("targetId"),
+  details: text("details"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export const emailDeliverySettings = mysqlTable("emailDeliverySettings", {
   id: int("id").autoincrement().primaryKey(),
   emailDeliveryEnabled: boolean("emailDeliveryEnabled").default(true).notNull(),
@@ -416,6 +463,9 @@ export type Like = typeof likes.$inferSelect;
 export type Save = typeof saves.$inferSelect;
 export type UserMediaPermission = typeof userMediaPermissions.$inferSelect;
 export type ContentReport = typeof contentReports.$inferSelect;
+export type ReelSubmission = typeof reelSubmissions.$inferSelect;
+export type ContentAppeal = typeof contentAppeals.$inferSelect;
+export type ModerationAuditEvent = typeof moderationAuditLog.$inferSelect;
 export type Follow = typeof follows.$inferSelect;
 export type Story = typeof stories.$inferSelect;
 export type Message = typeof messages.$inferSelect;

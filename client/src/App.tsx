@@ -6,7 +6,8 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { OfflineBanner } from "./components/TanryugramBetaPolish";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
-import Recovery from "./pages/Recovery";
+import Recovery from "@/pages/Recovery";
+import SafetyPolicy from "@/pages/SafetyPolicy";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -14,6 +15,7 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/recover"} component={Recovery} />
+      <Route path={"/safety"} component={SafetyPolicy} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

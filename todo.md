@@ -551,3 +551,7 @@
 - [x] Add account/post/video/Reels reporting with server-side authorization and owner moderation inbox
 - [x] Automatically hide content reported for pornography, child abuse, or dangerous material pending owner review
 - [x] Add moderation regression tests, responsive verification, and production validation
+
+- [x] Dedicated Reel workflow: 9:16 validation, upload submission, approval status tracking, and owner review controls
+- [x] Reporting protection: per-user rate limits and moderation audit log for report/review actions
+- [x] Community safety policy page and authenticated appeal workflow for hidden content
