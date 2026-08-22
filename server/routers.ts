@@ -236,7 +236,7 @@ export const appRouter = router({
   }),
   profile: router({
     byId: publicProcedure.input(z.object({ userId: z.number() })).query(({ input }) => db.getProfileById(input.userId)),
-    update: protectedProcedure.input(z.object({ name: z.string().optional(), username: z.string().optional(), bio: z.string().optional(), avatarUrl: z.string().optional(), subscriptionPrice: z.string().optional() })).mutation(({ ctx, input }) => db.updateUserProfile(ctx.user.id, input)),
+    update: protectedProcedure.input(z.object({ name: z.string().optional(), username: z.string().optional(), bio: z.string().optional(), avatarUrl: z.string().nullable().optional(), subscriptionPrice: z.string().optional() })).mutation(({ ctx, input }) => db.updateUserProfile(ctx.user.id, input)),
     applyForBadge: protectedProcedure.input(z.object({ requestedBadge: z.enum(["blue", "black"]), reason: z.string().max(1000).optional() })).mutation(({ ctx, input }) => db.applyForBadge(ctx.user.id, input.requestedBadge, input.reason)),
     myBadgeApplications: protectedProcedure.query(({ ctx }) => db.getUserBadgeApplications(ctx.user.id)),
   }),

@@ -349,7 +349,7 @@ export async function getTypingStatus(peerId: number, groupId?: number) {
   return db.select({ user: users, typing: typingStatus }).from(typingStatus).innerJoin(users, eq(typingStatus.userId, users.id)).where(and(eq(typingStatus.peerId, peerId), groupId ? eq(typingStatus.groupId, groupId) : sql`${typingStatus.groupId} IS NULL`, sql`${typingStatus.updatedAt} > ${threshold}`));
 }
 
-export async function updateUserProfile(userId: number, input: { name?: string; username?: string; bio?: string; avatarUrl?: string; subscriptionPrice?: string; badgeLabel?: string; showBadge?: boolean }) {
+export async function updateUserProfile(userId: number, input: { name?: string; username?: string; bio?: string; avatarUrl?: string | null; subscriptionPrice?: string; badgeLabel?: string; showBadge?: boolean }) {
   const db = await getDb();
   if (!db) return;
   const updateSet: Record<string, any> = {};

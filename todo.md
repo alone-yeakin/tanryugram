@@ -541,3 +541,5 @@
 - [x] Profile photo release: run build and preview verification and publish the update
 
 - [x] Independent profile-photo upload control: server enforcement, Creator Studio toggle, Account Settings behavior, and regression coverage
+
+- [x] Account Settings avatar improvements: add Remove Photo, upload progress spinner and success toast, and crop-before-save flow with regression coverage

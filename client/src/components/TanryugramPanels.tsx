@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { initialsAvatar, mediaSource } from "@/lib/mediaUrl";
+import { blobToDataUrl, clampCropOffset, cropAvatarImage, type CropOffset } from "@/lib/avatarCrop";
 import { SafeImage } from "@/components/SafeImage";
 import { toast } from "sonner";
 import { Link } from "wouter";
-import { ShieldCheck, Sparkles, UserCheck, UserX, Trash2, Lock, Camera, Check, ArrowRight, Bug, X, Plus, Mail, Download, Upload, Archive } from "lucide-react";
+import { ShieldCheck, Sparkles, UserCheck, UserX, Trash2, Lock, Camera, Check, ArrowRight, Bug, X, Plus, Mail, Download, Upload, Archive, Loader2 } from "lucide-react";
 import { BugReportModal } from "@/components/TanryugramBetaPolish";
 import { AIChatBox, type Message as GeminiChatMessage } from "@/components/AIChatBox";
 
@@ -506,6 +507,11 @@ export function AccountSettings({ user, onClose }: { user: any; onClose: () => v
   const [price, setPrice] = useState(user?.subscriptionPrice || "4.99");
   const [newPassword, setNewPassword] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [cropSource, setCropSource] = useState<string | null>(null);
+  const [cropFileName, setCropFileName] = useState("avatar.jpg");
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropOffset, setCropOffset] = useState<CropOffset>({ x: 0, y: 0 });
+  const dragStartRef = useRef<{ pointerX: number; pointerY: number; offset: CropOffset } | null>(null);
   const [showBugReport, setShowBugReport] = useState(false);
   const updateMutation = trpc.profile.update.useMutation();
   const requestResetMutation = trpc.auth.requestPasswordReset.useMutation();
@@ -542,40 +548,59 @@ export function AccountSettings({ user, onClose }: { user: any; onClose: () => v
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     if (!mediaPolicy.profilePhotosEnabled) { toast.error("Profile photo uploads are temporarily paused by the owner"); return; }
     const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     if (!allowedTypes.includes(file.type) || file.size > 10 * 1024 * 1024) { toast.error("Choose a JPG, PNG, WEBP, or GIF photo up to 10 MB"); return; }
     try {
-      setUploading(true);
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const base64Data = reader.result as string;
-          const res = await base64Mutation.mutateAsync({ fileName: file.name, base64Data, contentType: file.type || "image/jpeg", purpose: "profile" });
-          await updateMutation.mutateAsync({ avatarUrl: res.url });
-          setAvatarUrl(res.url);
-          await utils.auth.me.invalidate();
-          toast.success("Photo uploaded and saved successfully");
-        } catch (err: any) {
-          toast.error(err.message || "Failed to upload photo");
-        } finally {
-          setUploading(false);
-        }
-      };
-      reader.onerror = () => {
-        setUploading(false);
-        toast.error("Failed to read image file");
-      };
-      reader.readAsDataURL(file);
+      const source = await blobToDataUrl(file);
+      setCropSource(source);
+      setCropFileName(file.name.replace(/\.[^.]+$/, "") + "-avatar.jpg");
+      setCropZoom(1);
+      setCropOffset({ x: 0, y: 0 });
     } catch (err: any) {
+      toast.error(err.message || "Failed to read image file");
+    }
+  };
+
+  const saveCroppedPhoto = async () => {
+    if (!cropSource || uploading) return;
+    try {
+      setUploading(true);
+      const croppedBlob = await cropAvatarImage(cropSource, cropZoom, cropOffset);
+      const base64Data = await blobToDataUrl(croppedBlob);
+      const res = await base64Mutation.mutateAsync({ fileName: cropFileName, base64Data, contentType: "image/jpeg", purpose: "profile" });
+      await updateMutation.mutateAsync({ avatarUrl: res.url });
+      setAvatarUrl(res.url);
+      setCropSource(null);
+      await utils.auth.me.invalidate();
+      toast.success("Profile photo updated successfully");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload photo");
+    } finally {
       setUploading(false);
-      toast.error(err.message || "Failed to process photo");
+      dragStartRef.current = null;
+    }
+  };
+
+  const removePhoto = async () => {
+    if (!avatarUrl || uploading) return;
+    try {
+      setUploading(true);
+      await updateMutation.mutateAsync({ avatarUrl: null });
+      setAvatarUrl("");
+      await utils.auth.me.invalidate();
+      toast.success("Profile photo removed");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to remove photo");
+    } finally {
+      setUploading(false);
     }
   };
 
   const handleSave = () => {
-    updateMutation.mutate({ name, username, bio, avatarUrl, subscriptionPrice: price }, {
+    updateMutation.mutate({ name, username, bio, avatarUrl: avatarUrl || null, subscriptionPrice: price }, {
       onSuccess: () => {
         if (newPassword.trim()) {
           if (!passwordResetRequested) {
@@ -622,18 +647,35 @@ export function AccountSettings({ user, onClose }: { user: any; onClose: () => v
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 [overscroll-behavior:contain] sm:px-6">
           <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 overflow-hidden rounded-full bg-muted">
-              <SafeImage src={avatarUrl || user?.avatarUrl} fallback={avatarFallback} fallbackName={name || user?.username || "Tanryugram user"} loading="lazy" decoding="async" alt={name || "Tanryugram user"} className="h-full w-full object-cover" />
+          <div className="flex items-start gap-4">
+            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-muted">
+              <SafeImage src={avatarUrl} fallback={avatarFallback} fallbackName={name || user?.username || "Tanryugram user"} loading="lazy" decoding="async" alt={name || "Tanryugram user"} className="h-full w-full object-cover" />
             </div>
-            <div>
-              <label className="cursor-pointer rounded-xl bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:opacity-90">
-                {uploading ? "Uploading..." : "Change photo"}
-                <input type="file" accept={mediaPolicy.profilePhotosEnabled ? "image/jpeg,image/png,image/webp,image/gif" : ""} disabled={!mediaPolicy.profilePhotosEnabled || uploading} onChange={handleFileChange} className="hidden" />
-              </label>
-              <p className="mt-1 text-[10px] text-muted-foreground">{mediaPolicy.profilePhotosEnabled ? "Secure profile photo storage · JPG, PNG, WEBP, or GIF up to 10 MB" : "Profile photo uploads are temporarily paused by the owner"}</p>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:opacity-90 ${!mediaPolicy.profilePhotosEnabled || uploading ? "pointer-events-none opacity-60" : ""}`}>
+                  {uploading && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+                  {uploading ? "Saving photo…" : "Change photo"}
+                  <input type="file" accept={mediaPolicy.profilePhotosEnabled ? "image/jpeg,image/png,image/webp,image/gif" : ""} disabled={!mediaPolicy.profilePhotosEnabled || uploading} onChange={handleFileChange} className="hidden" />
+                </label>
+                <button type="button" onClick={removePhoto} disabled={!avatarUrl || uploading} className="min-h-11 rounded-xl border border-border bg-card px-4 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-50">Remove Photo</button>
+              </div>
+              <p className="mt-2 text-[10px] text-muted-foreground">{mediaPolicy.profilePhotosEnabled ? "Secure profile photo storage · JPG, PNG, WEBP, or GIF up to 10 MB" : "Profile photo uploads are temporarily paused by the owner"}</p>
+              {uploading && <p role="status" aria-live="polite" className="mt-2 flex items-center gap-2 text-[11px] font-medium text-violet-600 dark:text-violet-300"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Uploading and saving your profile photo…</p>}
             </div>
           </div>
+          {cropSource && <div role="dialog" aria-modal="true" aria-labelledby="avatar-crop-title" className="rounded-2xl border border-violet-300/60 bg-violet-500/5 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div><p id="avatar-crop-title" className="text-sm font-semibold">Adjust your profile photo</p><p className="mt-1 text-[10px] leading-5 text-muted-foreground">Drag the image to reposition it, then use the zoom slider before saving.</p></div>
+              <button type="button" onClick={() => setCropSource(null)} disabled={uploading} aria-label="Cancel crop" className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted disabled:opacity-50"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="relative mx-auto mt-4 h-64 w-64 max-w-full touch-none select-none overflow-hidden rounded-2xl bg-muted" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); dragStartRef.current = { pointerX: event.clientX, pointerY: event.clientY, offset: cropOffset }; }} onPointerMove={(event) => { const start = dragStartRef.current; if (!start) return; setCropOffset({ x: clampCropOffset(start.offset.x + event.clientX - start.pointerX, cropZoom), y: clampCropOffset(start.offset.y + event.clientY - start.pointerY, cropZoom) }); }} onPointerUp={() => { dragStartRef.current = null; }} onPointerCancel={() => { dragStartRef.current = null; }}>
+              <img src={cropSource} alt="Profile photo crop preview" draggable={false} className="h-full w-full object-cover" style={{ transform: `translate(${cropOffset.x}px, ${cropOffset.y}px) scale(${cropZoom})`, transformOrigin: "center" }} />
+              <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-white/90 shadow-[inset_0_0_0_999px_rgba(15,23,42,0.12)]" />
+            </div>
+            <label className="mt-4 block text-[11px] font-semibold">Zoom <input type="range" min="1" max="2.5" step="0.05" value={cropZoom} onChange={(event) => { const zoom = Number(event.target.value); setCropZoom(zoom); setCropOffset((current) => ({ x: clampCropOffset(current.x, zoom), y: clampCropOffset(current.y, zoom) })); }} className="mt-2 w-full accent-violet-600" /></label>
+            <div className="mt-4 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setCropSource(null)} disabled={uploading} className="min-h-11 rounded-xl border border-border px-4 py-2 text-xs font-semibold disabled:opacity-50">Cancel</button><button type="button" onClick={saveCroppedPhoto} disabled={uploading} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-foreground px-4 py-2 text-xs font-semibold text-background disabled:opacity-60">{uploading && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}{uploading ? "Saving…" : "Use this photo"}</button></div>
+          </div>}
           <div>
             <label className="text-xs font-semibold text-muted-foreground">Display Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5 h-11 w-full rounded-2xl bg-muted px-4 text-sm outline-none" />
