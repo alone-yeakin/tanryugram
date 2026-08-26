@@ -560,3 +560,7 @@
 - [x] August 28 release: in-app notifications for Reel approval/rejection and appeal decisions
 - [x] August 28 release: cursor-based infinite scrolling for approved Reels
 - [x] August 28 release: launch-readiness safeguards and responsive UX audit
+
+- [x] Reel engagement: add double-tap likes and native share actions with real metrics
+- [x] Notification navigation: deep-link Reel and appeal decisions to the relevant in-app destination
+- [x] Promotion Studio: owner-only transparent Reel promotion controls with real audience delivery and no fake engagement or guaranteed virality

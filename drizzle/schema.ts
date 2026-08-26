@@ -54,6 +54,24 @@ export const reelSubmissions = mysqlTable("reelSubmissions", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const reelLikes = mysqlTable("reelLikes", {
+  id: int("id").autoincrement().primaryKey(),
+  reelId: int("reelId").notNull(),
+  userId: int("userId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const reelPromotions = mysqlTable("reelPromotions", {
+  id: int("id").autoincrement().primaryKey(),
+  reelId: int("reelId").notNull(),
+  ownerId: int("ownerId").notNull(),
+  priority: int("priority").default(1).notNull(),
+  status: mysqlEnum("status", ["active", "paused", "ended"]).default("active").notNull(),
+  startsAt: timestamp("startsAt").defaultNow().notNull(),
+  endsAt: timestamp("endsAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export const contentAppeals = mysqlTable("contentAppeals", {
   id: int("id").autoincrement().primaryKey(),
   appellantId: int("appellantId").notNull(),
@@ -468,6 +486,8 @@ export type Save = typeof saves.$inferSelect;
 export type UserMediaPermission = typeof userMediaPermissions.$inferSelect;
 export type ContentReport = typeof contentReports.$inferSelect;
 export type ReelSubmission = typeof reelSubmissions.$inferSelect;
+export type ReelLike = typeof reelLikes.$inferSelect;
+export type ReelPromotion = typeof reelPromotions.$inferSelect;
 export type ContentAppeal = typeof contentAppeals.$inferSelect;
 export type ModerationAuditEvent = typeof moderationAuditLog.$inferSelect;
 export type Follow = typeof follows.$inferSelect;

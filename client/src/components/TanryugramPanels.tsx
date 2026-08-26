@@ -95,7 +95,10 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const posts = postsQuery.data || [];
   const applications = applicationsQuery.data || [];
   const mediaPermissions = mediaPermissionsQuery.data || [];
-  const reports = reportsQuery.data || []; const reels = reelsQuery.data || []; const appeals = appealsQuery.data || []; const auditLog = auditLogQuery.data || [];
+  const reports = reportsQuery.data || [];   const reels = reelsQuery.data || []; const appeals = appealsQuery.data || []; const auditLog = auditLogQuery.data || [];
+  const promotionsQuery = trpc.admin.reelsPromotions.useQuery();
+  const setPromotionMutation = trpc.admin.setReelPromotion.useMutation();
+  const promotions = promotionsQuery.data || [];
   const uploadPolicy = uploadPolicyQuery.data || { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
   const emailSettings = emailSettingsQuery.data || { emailDeliveryEnabled: true, signupVerificationEnabled: false, appScriptLoginEnabled: false, appScriptResetEnabled: false };
   const recoverySettings = recoverySettingsQuery.data || { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
@@ -224,6 +227,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
         <div className="mt-5 grid gap-3 lg:grid-cols-2">{users.map((u: any) => { const p = mediaPermissions.find((row: any) => row.userId === u.id) || { postsEnabled: true, photosEnabled: true, videosEnabled: false, reelsEnabled: false, storiesEnabled: true }; const controls = [["postsEnabled", "Posts"], ["photosEnabled", "Photos"], ["videosEnabled", "Videos"], ["reelsEnabled", "Reels"], ["storiesEnabled", "Stories"]] as const; return <div key={`permissions-${u.id}`} className="rounded-2xl border border-border/70 bg-muted/30 p-4"><div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-semibold">{u.name || u.username || "User"}</p><p className="truncate text-[10px] text-muted-foreground">{u.email || `@${u.username || "member"}`}</p></div><span className="rounded-full bg-background px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Manual access</span></div><div className="mt-3 flex flex-wrap gap-2">{controls.map(([field, label]) => <button key={field} type="button" onClick={() => setUserMediaPermissionsMutation.mutate({ userId: u.id, [field]: !p[field] }, { onSuccess: () => { utils.admin.mediaPermissions.invalidate(); toast.success(`${label} access ${p[field] ? "paused" : "granted"}`); }, onError: (error) => toast.error(error.message) })} className={`min-h-10 rounded-xl px-3 py-2 text-[10px] font-semibold transition ${p[field] ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border border-border bg-card text-muted-foreground"}`}>{label}: {p[field] ? "ON" : "OFF"}</button>)}</div></div>; })}</div>
         {users.length === 0 && <p className="mt-4 rounded-2xl border border-dashed border-border p-4 text-center text-[11px] text-muted-foreground">User permissions will appear after accounts are loaded.</p>}
       </div>
+
+      <PromotionStudioPanel reels={reels.map(r => r.reel)} promotions={promotions} onUpdate={(input) => setPromotionMutation.mutate(input, { onSuccess: () => { promotionsQuery.refetch(); toast.success("Promotion updated"); }, onError: (error) => toast.error(error.message) })} />
 
       <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -754,5 +759,61 @@ export function AccountSettings({ user, onClose }: { user: any; onClose: () => v
       </div>
       {showBugReport && <BugReportModal onClose={() => setShowBugReport(false)} />}
     </div>
+  );
+}
+
+function PromotionStudioPanel({ reels, promotions, onUpdate }: { reels: any[]; promotions: any[]; onUpdate: (input: any) => void }) {
+  const [selectedReelId, setSelectedReelId] = useState<number | null>(null);
+  const [priority, setPriority] = useState(1);
+  const [status, setStatus] = useState<"active" | "paused" | "ended">("active");
+  const activeReels = reels.filter(r => r.status === "approved");
+  return (
+    <section className="rounded-[28px] border border-border/70 bg-card p-5 shadow-sm sm:p-6">
+      <div className="flex flex-col gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500">Promotion Studio</p>
+        <h2 className="text-xl font-semibold">Campaign Management</h2>
+        <p className="text-xs leading-5 text-muted-foreground">Boost approved Reels in Explore. Transparent priority delivery with no fake metrics.</p>
+      </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
+        <div className="space-y-4">
+          <label className="block text-xs font-semibold">Select Reel to Promote
+            <select value={selectedReelId || ""} onChange={(e) => setSelectedReelId(Number(e.target.value))} className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm">
+              <option value="">Choose an approved Reel</option>
+              {activeReels.map(r => <option key={r.id} value={r.id}>{r.caption || `Reel #${r.id}`}</option>)}
+            </select>
+          </label>
+          {selectedReelId && (
+            <div className="flex flex-wrap gap-4">
+              <label className="block text-xs font-semibold">Priority (1-10)
+                <input type="number" min="1" max="10" value={priority} onChange={(e) => setPriority(Number(e.target.value))} className="mt-2 h-11 w-24 rounded-xl border border-border bg-background px-3 text-sm" />
+              </label>
+              <label className="block text-xs font-semibold">Status
+                <select value={status} onChange={(e) => setStatus(e.target.value as any)} className="mt-2 h-11 w-32 rounded-xl border border-border bg-background px-3 text-sm">
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="ended">Ended</option>
+                </select>
+              </label>
+              <button onClick={() => onUpdate({ reelId: selectedReelId, priority, status })} className="mt-6 h-11 rounded-xl bg-violet-600 px-6 text-xs font-semibold text-white hover:bg-violet-500 transition active:scale-95">Apply Campaign</button>
+            </div>
+          )}
+        </div>
+        <div className="rounded-2xl bg-muted/50 p-4">
+          <h3 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Active Campaigns</h3>
+          <div className="mt-3 space-y-2">
+            {promotions.filter(p => p.status === "active").map(p => {
+              const reel = reels.find(r => r.id === p.reelId);
+              return (
+                <div key={p.id} className="flex items-center justify-between gap-3 rounded-xl bg-background p-3 text-[11px]">
+                  <span className="truncate font-medium">{reel?.caption || `Reel #${p.reelId}`}</span>
+                  <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-1 font-bold text-violet-600">P{p.priority}</span>
+                </div>
+              );
+            })}
+            {!promotions.filter(p => p.status === "active").length && <p className="py-2 text-center text-[10px] text-muted-foreground italic">No active promotions</p>}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
