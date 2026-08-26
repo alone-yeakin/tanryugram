@@ -239,6 +239,13 @@
       "when": 1787757765788,
       "tag": "0033_omniscient_morph",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "5",
+      "when": 1787759150099,
+      "tag": "0034_late_kate_bishop",
+      "breakpoints": true
     }
   ]
 }

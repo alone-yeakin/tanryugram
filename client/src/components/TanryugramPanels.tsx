@@ -6,7 +6,7 @@ import { blobToDataUrl, clampCropOffset, cropAvatarImage, type CropOffset } from
 import { SafeImage } from "@/components/SafeImage";
 import { toast } from "sonner";
 import { Link } from "wouter";
-import { ShieldCheck, Sparkles, UserCheck, UserX, Trash2, Lock, Camera, Check, ArrowRight, Bug, X, Plus, Mail, Download, Upload, Archive, Loader2, Video } from "lucide-react";
+import { ShieldCheck, Sparkles, UserCheck, UserX, Trash2, Lock, Camera, Check, ArrowRight, Bug, X, Plus, Mail, Download, Upload, Archive, Loader2, Video, Play, Heart, MessageCircle } from "lucide-react";
 import { BugReportModal } from "@/components/TanryugramBetaPolish";
 import { AIChatBox, type Message as GeminiChatMessage } from "@/components/AIChatBox";
 
@@ -766,6 +766,11 @@ function PromotionStudioPanel({ reels, promotions, onUpdate }: { reels: any[]; p
   const [selectedReelId, setSelectedReelId] = useState<number | null>(null);
   const [priority, setPriority] = useState(1);
   const [status, setStatus] = useState<"active" | "paused" | "ended">("active");
+  
+  const activePromotions = promotions.filter(p => p.status === "active");
+  const promotedIds = activePromotions.map(p => p.reelId);
+  const analytics = trpc.admin.reelsAnalytics.useQuery({ reelIds: promotedIds }, { enabled: promotedIds.length > 0 });
+  
   const activeReels = reels.filter(r => r.status === "approved");
   return (
     <section className="rounded-[28px] border border-border/70 bg-card p-5 shadow-sm sm:p-6">
@@ -801,16 +806,24 @@ function PromotionStudioPanel({ reels, promotions, onUpdate }: { reels: any[]; p
         <div className="rounded-2xl bg-muted/50 p-4">
           <h3 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Active Campaigns</h3>
           <div className="mt-3 space-y-2">
-            {promotions.filter(p => p.status === "active").map(p => {
+            {activePromotions.map(p => {
               const reel = reels.find(r => r.id === p.reelId);
+              const stats = analytics.data?.[p.reelId] || { views: 0, likes: 0, comments: 0 };
               return (
-                <div key={p.id} className="flex items-center justify-between gap-3 rounded-xl bg-background p-3 text-[11px]">
-                  <span className="truncate font-medium">{reel?.caption || `Reel #${p.reelId}`}</span>
-                  <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-1 font-bold text-violet-600">P{p.priority}</span>
+                <div key={p.id} className="rounded-xl bg-background p-3 text-[11px]">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate font-medium">{reel?.caption || `Reel #${p.reelId}`}</span>
+                    <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-1 font-bold text-violet-600">P{p.priority}</span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-3 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <span className="flex items-center gap-1"><Play className="h-2.5 w-2.5" /> {stats.views}</span>
+                    <span className="flex items-center gap-1"><Heart className="h-2.5 w-2.5" /> {stats.likes}</span>
+                    <span className="flex items-center gap-1"><MessageCircle className="h-2.5 w-2.5" /> {stats.comments}</span>
+                  </div>
                 </div>
               );
             })}
-            {!promotions.filter(p => p.status === "active").length && <p className="py-2 text-center text-[10px] text-muted-foreground italic">No active promotions</p>}
+            {!activePromotions.length && <p className="py-2 text-center text-[10px] text-muted-foreground italic">No active promotions</p>}
           </div>
         </div>
       </div>

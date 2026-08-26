@@ -564,3 +564,7 @@
 - [x] Reel engagement: add double-tap likes and native share actions with real metrics
 - [x] Notification navigation: deep-link Reel and appeal decisions to the relevant in-app destination
 - [x] Promotion Studio: owner-only transparent Reel promotion controls with real audience delivery and no fake engagement or guaranteed virality
+
+- [x] Reel analytics: track and display real view, like, and comment counts in Promotion Studio
+- [x] Reel bookmarks: add "Save for later" bookmark button and persistence for Reels
+- [x] Reel interaction: add a mobile-friendly slide-up comments panel for the Reels feed

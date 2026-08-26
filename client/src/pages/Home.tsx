@@ -9,7 +9,7 @@ import { initialsAvatar } from "@/lib/mediaUrl";
 import { resolveProfileUser } from "@/lib/profileViewData";
 import { toast } from "sonner";
 import {
-  Bell, Bookmark, Check, ChevronRight, CircleHelp, Compass, CreditCard, Download, Flag, Heart, Home as HomeIcon, ImagePlus, Lock, LogOut, Mail, Menu, MessageCircle, MoreHorizontal, Moon, PhoneCall, PhoneIncoming, PhoneMissed, Play, Plus, Search, Send, Settings, Share2, ShieldCheck, Sparkles, Sun, Users, Video, X, Zap,
+  Bell, Bookmark, Check, ChevronRight, CircleHelp, Compass, CreditCard, Download, Flag, Heart, Home as HomeIcon, ImagePlus, Lock, LogOut, Mail, Menu, MessageCircle, MoreHorizontal, Moon, PhoneCall, PhoneIncoming, PhoneMissed, Play, Plus, Search, Send, Loader2, Settings, Share2, ShieldCheck, Sparkles, Sun, Users, Video, X, Zap,
 } from "lucide-react";
 import { LoginPanel, AdminView, AccountSettings, ReelSubmissionCard } from "@/components/TanryugramPanels";
 import { AdvancedMessagesView, MultiImageComposer, ReactionButton, StoryBarLive, StoryViewerLive } from "@/components/TanryugramAdvancedFeatures";
@@ -293,8 +293,13 @@ function NotificationRow({ row, onSelect }: { row: any; onSelect: (type: string,
 function ReelCard({ item }: { item: any }) {
   const [lastTap, setLastTap] = useState(0);
   const [showHeart, setShowHeart] = useState(false);
+  const [showComments, setShowComments] = useState(false);
   const toggleLike = trpc.reels.toggleLike.useMutation();
+  const toggleBookmark = trpc.reels.toggleBookmark.useMutation();
+  const recordView = trpc.reels.recordView.useMutation();
   const utils = trpc.useUtils();
+
+  useEffect(() => { recordView.mutate({ reelId: item.reel.id }); }, [item.reel.id]);
 
   const handleDoubleTap = () => {
     const now = Date.now();
@@ -317,30 +322,77 @@ function ReelCard({ item }: { item: any }) {
   };
 
   return (
-    <article onClick={handleDoubleTap} className="relative flex aspect-[9/16] w-[min(72vw,260px)] shrink-0 snap-center overflow-hidden rounded-[28px] bg-black shadow-lg">
-      <video src={item.reel.processedMediaUrl || item.reel.mediaUrl} poster={item.reel.thumbnailUrl || undefined} controls playsInline preload="metadata" className="h-full w-full object-cover" />
-      
-      {showHeart && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><Heart className="h-20 w-20 animate-ping fill-white text-white opacity-80" /></div>}
+    <>
+      <article onClick={handleDoubleTap} className="relative flex aspect-[9/16] w-[min(72vw,260px)] shrink-0 snap-center overflow-hidden rounded-[28px] bg-black shadow-lg">
+        <video src={item.reel.processedMediaUrl || item.reel.mediaUrl} poster={item.reel.thumbnailUrl || undefined} controls playsInline preload="metadata" className="h-full w-full object-cover" />
+        
+        {showHeart && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><Heart className="h-20 w-20 animate-ping fill-white text-white opacity-80" /></div>}
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-16 text-white">
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2"><p className="text-xs font-semibold">{item.user?.name || item.user?.username || "TanRyuGram creator"}</p>{item.isPromoted && <span className="rounded-full bg-violet-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-violet-300 ring-1 ring-inset ring-violet-500/30">Promoted</span>}</div>
-            {item.reel.caption && <p className="mt-1 line-clamp-2 text-[11px] text-white/80">{item.reel.caption}</p>}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-16 text-white">
+          <div className="flex items-end justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2"><p className="text-xs font-semibold">{item.user?.name || item.user?.username || "TanRyuGram creator"}</p>{item.isPromoted && <span className="rounded-full bg-violet-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-violet-300 ring-1 ring-inset ring-violet-500/30">Promoted</span>}</div>
+              {item.reel.caption && <p className="mt-1 line-clamp-2 text-[11px] text-white/80">{item.reel.caption}</p>}
+            </div>
+            <div className="pointer-events-auto flex flex-col items-center gap-4">
+              <button onClick={(e) => { e.stopPropagation(); toggleLike.mutate({ reelId: item.reel.id }, { onSuccess: () => utils.reels.approved.invalidate() }); }} className="group flex flex-col items-center gap-1">
+                <Heart className={`h-5 w-5 transition-transform group-active:scale-125 ${toggleLike.isPending ? "animate-pulse" : ""}`} />
+                <span className="text-[10px] font-bold">Like</span>
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); setShowComments(true); }} className="group flex flex-col items-center gap-1">
+                <MessageCircle className="h-5 w-5 transition-transform group-active:scale-125" />
+                <span className="text-[10px] font-bold">Chat</span>
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); toggleBookmark.mutate({ reelId: item.reel.id }, { onSuccess: () => toast.success("Saved to bookmarks") }); }} className="group flex flex-col items-center gap-1">
+                <Bookmark className={`h-5 w-5 transition-transform group-active:scale-125 ${toggleBookmark.isPending ? "animate-pulse" : ""}`} />
+                <span className="text-[10px] font-bold">Save</span>
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); handleShare(); }} className="group flex flex-col items-center gap-1">
+                <Share2 className="h-5 w-5 transition-transform group-active:scale-125" />
+                <span className="text-[10px] font-bold">Share</span>
+              </button>
+            </div>
           </div>
-          <div className="pointer-events-auto flex flex-col items-center gap-4">
-            <button onClick={(e) => { e.stopPropagation(); toggleLike.mutate({ reelId: item.reel.id }, { onSuccess: () => utils.reels.approved.invalidate() }); }} className="group flex flex-col items-center gap-1">
-              <Heart className={`h-5 w-5 transition-transform group-active:scale-125 ${toggleLike.isPending ? "animate-pulse" : ""}`} />
-              <span className="text-[10px] font-bold">Like</span>
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); handleShare(); }} className="group flex flex-col items-center gap-1">
-              <Share2 className="h-5 w-5 transition-transform group-active:scale-125" />
-              <span className="text-[10px] font-bold">Share</span>
+        </div>
+      </article>
+      {showComments && <ReelCommentsPanel reelId={item.reel.id} onClose={() => setShowComments(false)} />}
+    </>
+  );
+}
+
+function ReelCommentsPanel({ reelId, onClose }: { reelId: number; onClose: () => void }) {
+  const [content, setContent] = useState("");
+  const comments = trpc.reels.comments.useQuery({ reelId });
+  const submit = trpc.reels.comment.useMutation();
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 backdrop-blur-sm sm:p-4" onClick={onClose}>
+      <div className="flex h-[70dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[32px] bg-card shadow-2xl sm:rounded-[32px]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-border/70 p-5">
+          <h3 className="font-semibold text-sm">Comments</h3>
+          <button onClick={onClose} className="rounded-full p-2 hover:bg-muted"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          {comments.data?.length ? comments.data.map((row: any) => (
+            <div key={row.comment.id} className="flex gap-3">
+              <Avatar src={row.user.avatarUrl} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold">{row.user.name || row.user.username}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{row.comment.content}</p>
+              </div>
+            </div>
+          )) : <div className="py-12 text-center text-xs text-muted-foreground">No comments yet. Be the first to share your thoughts!</div>}
+        </div>
+        <div className="border-t border-border/70 p-4">
+          <div className="flex items-center gap-2 rounded-2xl bg-muted p-1.5">
+            <input value={content} onChange={e => setContent(e.target.value)} placeholder="Add a comment..." className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none" />
+            <button disabled={!content.trim() || submit.isPending} onClick={() => submit.mutate({ reelId, content }, { onSuccess: () => { setContent(""); comments.refetch(); } })} className="rounded-xl bg-foreground p-2.5 text-background transition active:scale-90 disabled:opacity-50">
+              {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </button>
           </div>
         </div>
       </div>
-    </article>
+    </div>
   );
 }
 
