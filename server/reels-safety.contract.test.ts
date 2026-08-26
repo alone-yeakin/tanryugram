@@ -6,6 +6,7 @@ const router = readFileSync(resolve(process.cwd(), "server/routers.ts"), "utf8")
 const db = readFileSync(resolve(process.cwd(), "server/db.ts"), "utf8");
 const schema = readFileSync(resolve(process.cwd(), "drizzle/schema.ts"), "utf8");
 const uploader = readFileSync(resolve(process.cwd(), "client/src/components/TanryugramPanels.tsx"), "utf8");
+const home = readFileSync(resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
 const safety = readFileSync(resolve(process.cwd(), "client/src/pages/SafetyPolicy.tsx"), "utf8");
 
 describe("Reels and safety workflow contracts", () => {
@@ -17,6 +18,10 @@ describe("Reels and safety workflow contracts", () => {
     expect(uploader).toContain("Submit a 9:16 short video");
     expect(uploader).toContain('purpose: "reel"');
     expect(uploader).toContain("Your submission status");
+    expect(uploader).toContain("createVideoThumbnail");
+    expect(home).toContain("useInfiniteQuery");
+    expect(home).toContain("Loading more Reels");
+    expect(schema).toContain("reel_approved");
   });
 
   it("limits reports and records moderation and appeal decisions", () => {

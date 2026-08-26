@@ -38,6 +38,10 @@ export const reelSubmissions = mysqlTable("reelSubmissions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   mediaUrl: text("mediaUrl").notNull(),
+  processedMediaUrl: text("processedMediaUrl"),
+  thumbnailUrl: text("thumbnailUrl"),
+  processingStatus: mysqlEnum("processingStatus", ["pending", "ready", "failed"]).default("pending").notNull(),
+  processingError: text("processingError"),
   caption: text("caption"),
   width: int("width").notNull(),
   height: int("height").notNull(),
@@ -447,7 +451,7 @@ export const notifications = mysqlTable("notifications", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(), // recipient
   actorId: int("actorId").notNull(), // user who triggered
-  type: mysqlEnum("type", ["like", "comment", "follow", "message", "tip", "subscribe"]).notNull(),
+  type: mysqlEnum("type", ["like", "comment", "follow", "message", "tip", "subscribe", "reel_approved", "reel_rejected", "appeal_approved", "appeal_rejected"]).notNull(),
   targetId: int("targetId"), // postId or messageId if applicable
   content: text("content").notNull(),
   isRead: boolean("isRead").default(false).notNull(),

@@ -555,3 +555,8 @@
 - [x] Dedicated Reel workflow: 9:16 validation, upload submission, approval status tracking, and owner review controls
 - [x] Reporting protection: per-user rate limits and moderation audit log for report/review actions
 - [x] Community safety policy page and authenticated appeal workflow for hidden content
+
+- [x] August 28 release: deployment-safe Reel media processing metadata and automated first-frame thumbnail generation; true server transcoding remains infrastructure-dependent
+- [x] August 28 release: in-app notifications for Reel approval/rejection and appeal decisions
+- [x] August 28 release: cursor-based infinite scrolling for approved Reels
+- [x] August 28 release: launch-readiness safeguards and responsive UX audit
