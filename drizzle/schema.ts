@@ -79,8 +79,26 @@ export const reelComments = mysqlTable("reelComments", {
   id: int("id").autoincrement().primaryKey(),
   reelId: int("reelId").notNull(),
   userId: int("userId").notNull(),
+  parentId: int("parentId"), // for replies
   content: text("content").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const reelCommentLikes = mysqlTable("reelCommentLikes", {
+  id: int("id").autoincrement().primaryKey(),
+  commentId: int("commentId").notNull(),
+  userId: int("userId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const dailyReelAnalytics = mysqlTable("dailyReelAnalytics", {
+  id: int("id").autoincrement().primaryKey(),
+  reelId: int("reelId").notNull(),
+  date: timestamp("date").notNull(),
+  views: int("views").default(0).notNull(),
+  likes: int("likes").default(0).notNull(),
+  comments: int("comments").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export const reelPromotions = mysqlTable("reelPromotions", {
@@ -512,6 +530,8 @@ export type ReelLike = typeof reelLikes.$inferSelect;
 export type ReelView = typeof reelViews.$inferSelect;
 export type ReelBookmark = typeof reelBookmarks.$inferSelect;
 export type ReelComment = typeof reelComments.$inferSelect;
+export type ReelCommentLike = typeof reelCommentLikes.$inferSelect;
+export type DailyReelAnalytics = typeof dailyReelAnalytics.$inferSelect;
 export type ReelPromotion = typeof reelPromotions.$inferSelect;
 export type ContentAppeal = typeof contentAppeals.$inferSelect;
 export type ModerationAuditEvent = typeof moderationAuditLog.$inferSelect;

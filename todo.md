@@ -568,3 +568,7 @@
 - [x] Reel analytics: track and display real view, like, and comment counts in Promotion Studio
 - [x] Reel bookmarks: add "Save for later" bookmark button and persistence for Reels
 - [x] Reel interaction: add a mobile-friendly slide-up comments panel for the Reels feed
+
+- [x] Profile Saved Reels: add a dedicated tab to manage bookmarked Reels
+- [x] Reel comment enhancements: add real likes for individual comments and direct user replies
+- [x] Promotion Studio trends: add seven-day visual engagement charts for views, likes, and comments

@@ -766,10 +766,12 @@ function PromotionStudioPanel({ reels, promotions, onUpdate }: { reels: any[]; p
   const [selectedReelId, setSelectedReelId] = useState<number | null>(null);
   const [priority, setPriority] = useState(1);
   const [status, setStatus] = useState<"active" | "paused" | "ended">("active");
+  const [chartReelId, setChartReelId] = useState<number | null>(null);
   
   const activePromotions = promotions.filter(p => p.status === "active");
   const promotedIds = activePromotions.map(p => p.reelId);
   const analytics = trpc.admin.reelsAnalytics.useQuery({ reelIds: promotedIds }, { enabled: promotedIds.length > 0 });
+  const trends = trpc.admin.reelTrends.useQuery({ reelId: chartReelId! }, { enabled: chartReelId !== null });
   
   const activeReels = reels.filter(r => r.status === "approved");
   return (
@@ -815,11 +817,36 @@ function PromotionStudioPanel({ reels, promotions, onUpdate }: { reels: any[]; p
                     <span className="truncate font-medium">{reel?.caption || `Reel #${p.reelId}`}</span>
                     <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-1 font-bold text-violet-600">P{p.priority}</span>
                   </div>
-                  <div className="mt-2 flex items-center gap-3 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                    <span className="flex items-center gap-1"><Play className="h-2.5 w-2.5" /> {stats.views}</span>
-                    <span className="flex items-center gap-1"><Heart className="h-2.5 w-2.5" /> {stats.likes}</span>
-                    <span className="flex items-center gap-1"><MessageCircle className="h-2.5 w-2.5" /> {stats.comments}</span>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <span className="flex items-center gap-1"><Play className="h-2.5 w-2.5" /> {stats.views}</span>
+                      <span className="flex items-center gap-1"><Heart className="h-2.5 w-2.5" /> {stats.likes}</span>
+                      <span className="flex items-center gap-1"><MessageCircle className="h-2.5 w-2.5" /> {stats.comments}</span>
+                    </div>
+                    <button onClick={() => setChartReelId(chartReelId === p.reelId ? null : p.reelId)} className="text-[9px] font-bold uppercase tracking-wider text-violet-500 hover:underline">{chartReelId === p.reelId ? "Hide Trends" : "View Trends"}</button>
                   </div>
+                  {chartReelId === p.reelId && (
+                    <div className="mt-4 space-y-3 rounded-xl border border-violet-100 bg-violet-500/5 p-3">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-violet-600">7-Day Engagement Trend</p>
+                      {trends.isLoading ? <div className="h-24 animate-pulse rounded-lg bg-muted" /> : trends.data?.length ? (
+                        <div className="flex h-24 items-end gap-1.5">
+                          {trends.data.map((day: any) => {
+                            const max = Math.max(...trends.data.map((d: any) => d.views + d.likes + d.comments), 1);
+                            const height = Math.max(15, ((day.views + day.likes + day.comments) / max) * 100);
+                            return (
+                              <div key={day.id} className="group relative flex flex-1 flex-col items-center gap-1">
+                                <div style={{ height: `${height}%` }} className="w-full rounded-t-sm bg-violet-500/40 transition-colors group-hover:bg-violet-500" />
+                                <span className="text-[7px] text-muted-foreground">{new Date(day.date).toLocaleDateString(undefined, { weekday: 'short' })}</span>
+                                <div className="pointer-events-none absolute bottom-full mb-2 hidden rounded bg-foreground px-1.5 py-1 text-[8px] text-background group-hover:block">
+                                  {day.views}v · {day.likes}l · {day.comments}c
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : <p className="py-4 text-center text-[9px] text-muted-foreground italic">No trend data yet</p>}
+                    </div>
+                  )}
                 </div>
               );
             })}
