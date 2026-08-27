@@ -605,4 +605,11 @@
 - [x] Platform Settings: Add owner-managed payment contact instructions for PayPal, bKash, and Nagad
 - [x] Creator Studio: Add manual approval workflow for paid badge requests
 - [x] Production crash repair: trace and fix the mobile website error caused by reading an identifier from unavailable data
-- [x] Production crash validation: add a regression test, verify the mobile route, and publish the repair
+- [x] Production crash validation: add a regression test, verify the mobile route, and publish the repair — live published login route completed its session check and rendered without the prior undefined-id error
+
+- [x] Production startup crash follow-up: reproduce the remaining undefined-id error on the published mobile route
+- [x] Production startup crash follow-up: harden all startup-mounted feed, story, call, notification, and profile row mappings
+- [x] Production startup crash follow-up: add regression coverage, validate live mobile loading, and publish the repair
+
+- [x] Production startup crash follow-up: reproduce the remaining undefined-id error on the published mobile route — the sandbox session currently reaches the native email/password login screen, so the failing branch is likely authenticated or data-dependent
+
