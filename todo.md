@@ -750,6 +750,29 @@
 - [x] Add regression tests for the new call, badge, and alert contracts
 - [x] Run TypeScript, focused tests, production build, and responsive verification
 - [x] Build and verify a fresh Android debug APK from the latest source
-- [ ] Save and publish the updated web checkpoint
-- [ ] Deliver the updated checkpoint, APK, and mobile retest guidance
+- [x] Save and publish the updated web checkpoint
+- [x] Deliver the updated checkpoint, APK, and mobile retest guidance
 
+
+## Reload, Follow State & Profile List Crash Repair (Current Session)
+
+- [x] Inspect reload controls, follow mutations, profile stats, and followers/following navigation
+- [x] Add a visible reload action with loading and error feedback
+- [x] Fix follow/unfollow cache updates so the button reflects the server state immediately
+- [x] Harden followers/following list queries and rendering against malformed or missing user rows
+- [x] Preserve safe navigation from list entries into user profiles
+- [x] Add regression tests for reload, follow state, and profile-list crash paths
+- [x] Run TypeScript, focused tests, production build, and responsive smoke verification
+- [ ] Save and publish the verified navigation repair
+- [ ] Deliver concise retest guidance
+
+## Full Platform Feature Restoration (Current Session)
+
+- [x] Audit the existing feature surface against the full social-platform requirements and prior code
+- [x] Restore and harden the follower, following, profile-list, and relationship state system
+- [x] Restore Creator Studio controls for user permissions, posting access, media access, badges, moderation, and platform settings
+- [x] Verify Reels, stories, Messenger, calls, groups, reports, privacy, and notifications remain present and reliable
+- [x] Add a complete regression suite for restored systems and critical cross-feature contracts
+- [x] Run TypeScript, focused tests, production build, and mobile/desktop smoke verification
+- [ ] Save and publish the restored full-feature release
+- [ ] Deliver the complete restoration report and retest steps

@@ -17,7 +17,7 @@ import { sendIncomingCallPush } from "./firebaseAdmin";
 import { checkEmailCodeRateLimit } from "./emailRateLimit";
 import { buildUserMigrationArchive, importUserMigrationArchive, inspectUserMigrationArchive, USER_MIGRATION_MAX_BYTES } from "./userMigration";
 import { applySafeGeminiActions, generateGeminiChatReply, generateGeminiFeatureProposal } from "./geminiAssistant";
-import { users, messages, emailVerificationCodes, userSettings, badgeMarketplaceSettings, badgeApplications, platformPaymentSettings, recoverySupportRequests, recoverySupportMessages, contentAppeals, follows, reelSubmissions, reelBookmarks, contentReports, reelComments, reelLikes, reelViews, messageReactions, calls, notifications, comments, pushTokens, likes, saves, dailyReelAnalytics, postMedia, reelPromotions, userMediaPermissions, groupMessages, groupEvents, groupPolls, groupPollOptions, groupJoinRequests, groupMembers, groups, groupInviteRequests, typingStatus, groupEventRsvps, groupPollVotes, conversationSettings, posts, stories, storyViews, storyReplies } from "../drizzle/schema";
+import { users, messages, emailVerificationCodes, userSettings, badgeMarketplaceSettings, badgeApplications, platformPaymentSettings, recoverySupportRequests, recoverySupportMessages, contentAppeals, follows, followRequests, reelSubmissions, reelBookmarks, contentReports, reelComments, reelLikes, reelViews, messageReactions, calls, notifications, comments, pushTokens, likes, saves, dailyReelAnalytics, postMedia, reelPromotions, userMediaPermissions, groupMessages, groupEvents, groupPolls, groupPollOptions, groupJoinRequests, groupMembers, groups, groupInviteRequests, typingStatus, groupEventRsvps, groupPollVotes, conversationSettings, posts, stories, storyViews, storyReplies } from "../drizzle/schema";
 
 const stripe = () => {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -42,6 +42,28 @@ const PHOTO_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const VIDEO_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
 const IMAGE_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const VIDEO_CONTENT_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+
+async function assertUserCanCreateContent(userId: number, purpose: "profile" | "post" | "story" | "reel", contentType?: string) {
+  const database = await db.getDb();
+  if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+  const [author] = await database.select({ isBanned: users.isBanned, contentHidden: users.contentHidden }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!author || author.isBanned) throw new TRPCError({ code: "FORBIDDEN", message: "This account cannot publish content." });
+  if (purpose !== "profile" && author.contentHidden) throw new TRPCError({ code: "FORBIDDEN", message: "Publishing is currently paused for this account by the Creator Studio." });
+
+  const [policy, permissions] = await Promise.all([db.getMediaUploadPolicy(), db.getUserMediaPermissions(userId)]);
+  if (purpose === "post" && !permissions.postsEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Post publishing is currently disabled for this account." });
+  if (purpose === "story" && !permissions.storiesEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Story publishing is currently disabled for this account." });
+  if (purpose === "reel" && !permissions.reelsEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Reel publishing is currently disabled for this account." });
+  if (purpose === "profile" && !policy.profilePhotosEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Profile photo uploads are disabled." });
+
+  if (contentType?.startsWith("image/") && (purpose === "post" || purpose === "story") && (!policy.photosEnabled || !permissions.photosEnabled)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Photo uploads are currently disabled for this account." });
+  }
+  if (contentType?.startsWith("video/") && (purpose === "post" || purpose === "story") && (!policy.videosEnabled || !permissions.videosEnabled)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Video uploads are currently disabled for this account." });
+  }
+}
 
 async function validateMediaUpload(contentType: string, sizeBytes?: number, purpose: "post" | "profile" | "reel" | "banner" = "post", userId?: number) {
   const policy = await db.getMediaUploadPolicy();
@@ -307,10 +329,17 @@ export const appRouter = router({
     setRole: adminOnly.input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) })).mutation(async ({ input }) => {
       await db.setUserRole(input.userId, input.role);
     }),
-    setUserMediaPermissions: adminOnly.input(z.object({ userId: z.number(), postsEnabled: z.boolean(), photosEnabled: z.boolean(), videosEnabled: z.boolean(), reelsEnabled: z.boolean(), storiesEnabled: z.boolean() })).mutation(async ({ input }) => {
+    setUserMediaPermissions: adminOnly.input(z.object({ userId: z.number(), postsEnabled: z.boolean(), photosEnabled: z.boolean(), videosEnabled: z.boolean(), reelsEnabled: z.boolean(), storiesEnabled: z.boolean() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await database.insert(userMediaPermissions).values(input).onDuplicateKeyUpdate({ set: input });
+      const values = { ...input, updatedBy: ctx.user.id };
+      await database.insert(userMediaPermissions).values(values).onDuplicateKeyUpdate({ set: values });
+      return await db.getUserMediaPermissions(input.userId);
+    }),
+    setContentHidden: adminOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(users).set({ contentHidden: input.value }).where(eq(users.id, input.userId));
     }),
     verifyUser: adminOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(async ({ input }) => {
       await db.verifyUser(input.userId, input.value);
@@ -468,6 +497,7 @@ export const appRouter = router({
     create: protectedProcedure.input(z.object({ content: z.string(), location: z.string().optional(), mediaUrls: z.array(z.string()).optional() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertUserCanCreateContent(ctx.user.id, "post");
       const [post] = await database.insert(posts).values({ userId: ctx.user.id, caption: input.content, mediaUrl: input.mediaUrls?.[0] || "", location: input.location }).$returningId();
       if (input.mediaUrls && input.mediaUrls.length > 1) {
         for (let i = 1; i < input.mediaUrls.length; i++) {
@@ -509,6 +539,7 @@ export const appRouter = router({
     submit: protectedProcedure.input(z.object({ mediaUrl: z.string(), thumbnailUrl: z.string().optional(), caption: z.string().optional(), width: z.number(), height: z.number() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertUserCanCreateContent(ctx.user.id, "reel", "video/mp4");
       await database.insert(reelSubmissions).values({ userId: ctx.user.id, ...input });
     }),
     approved: publicProcedure.input(z.object({ cursor: z.number().nullish(), limit: z.number().min(1).max(50).default(10) })).query(async ({ input }) => {
@@ -593,14 +624,13 @@ export const appRouter = router({
   media: router({
     policy: publicProcedure.query(async () => await db.getMediaUploadPolicy()),
     prepareUpload: protectedProcedure.input(z.object({ fileName: z.string(), contentType: z.string(), purpose: z.enum(["profile", "post", "story", "reel"]) })).mutation(async ({ ctx, input }) => {
+      await assertUserCanCreateContent(ctx.user.id, input.purpose, input.contentType);
       const key = `uploads/${ctx.user.id}/${Date.now()}_${input.fileName}`;
       const { url, uploadUrl } = await storagePresignPut(key, input.contentType);
       return { url, uploadUrl, key, fields: {} };
     }),
     uploadBase64: protectedProcedure.input(z.object({ base64Data: z.string(), purpose: z.enum(["profile", "post", "story", "reel"]), contentType: z.string().optional(), fileName: z.string().optional() })).mutation(async ({ ctx, input }) => {
-      const policy = await db.getMediaUploadPolicy();
-      if (input.purpose === "profile" && !policy.profilePhotosEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Profile photo uploads are disabled" });
-      if (input.purpose === "post" && !policy.photosEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Photo uploads are disabled" });
+      await assertUserCanCreateContent(ctx.user.id, input.purpose, input.contentType);
       const buffer = Buffer.from(input.base64Data.split(",")[1], "base64");
       const key = `uploads/${ctx.user.id}/${Date.now()}_${input.fileName || "file"}.${input.contentType?.split("/")[1] || "jpg"}`;
       const { url } = await storagePut(key, buffer, input.contentType);
@@ -611,23 +641,60 @@ export const appRouter = router({
     toggle: protectedProcedure.input(z.object({ followingId: z.number() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.followingId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot follow your own profile." });
+      const target = await db.getUserById(input.followingId);
+      if (!target || target.isBanned) throw new TRPCError({ code: "NOT_FOUND", message: "This profile is unavailable." });
       const existing = (await database.select().from(follows).where(and(eq(follows.followerId, ctx.user.id), eq(follows.followingId, input.followingId))).limit(1))[0];
       if (existing) {
         await database.delete(follows).where(eq(follows.id, existing.id));
         return { following: false, requestPending: false };
       }
+      const [existingRequest] = await database.select().from(followRequests).where(and(eq(followRequests.followerId, ctx.user.id), eq(followRequests.followingId, input.followingId), eq(followRequests.status, "pending"))).limit(1);
+      if (existingRequest) {
+        await database.delete(followRequests).where(eq(followRequests.id, existingRequest.id));
+        return { following: false, requestPending: false };
+      }
+      const [targetSettings] = await database.select().from(userSettings).where(eq(userSettings.userId, input.followingId)).limit(1);
+      if (targetSettings?.isPrivate) {
+        await database.insert(followRequests).values({ followerId: ctx.user.id, followingId: input.followingId, status: "pending" });
+        return { following: false, requestPending: true };
+      }
       await database.insert(follows).values({ followerId: ctx.user.id, followingId: input.followingId });
       return { following: true, requestPending: false };
     }),
-    followers: publicProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
+    state: protectedProcedure.input(z.object({ userId: z.number() })).query(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database || input.userId === ctx.user.id) return false;
+      const [row] = await database.select({ id: follows.id }).from(follows).where(and(eq(follows.followerId, ctx.user.id), eq(follows.followingId, input.userId))).limit(1);
+      return Boolean(row?.id);
+    }),
+    requestState: protectedProcedure.input(z.object({ userId: z.number() })).query(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database || input.userId === ctx.user.id) return false;
+      const [row] = await database.select({ id: followRequests.id }).from(followRequests).where(and(eq(followRequests.followerId, ctx.user.id), eq(followRequests.followingId, input.userId), eq(followRequests.status, "pending"))).limit(1);
+      return Boolean(row?.id);
+    }),
+    followers: protectedProcedure.input(z.object({ userId: z.number() })).query(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) return [];
+      const [settings, viewerFollow] = await Promise.all([
+        database.select().from(userSettings).where(eq(userSettings.userId, input.userId)).limit(1),
+        database.select({ id: follows.id }).from(follows).where(and(eq(follows.followerId, ctx.user.id), eq(follows.followingId, input.userId))).limit(1),
+      ]);
+      if (settings[0]?.showFollowersList === false && ctx.user.id !== input.userId) return [];
+      if (settings[0]?.isPrivate && ctx.user.id !== input.userId && !viewerFollow[0]) return [];
       const res = await database.select({ user: users }).from(follows).innerJoin(users, eq(follows.followerId, users.id)).where(eq(follows.followingId, input.userId));
       return res.map(r => sanitizeAuthUser(r.user));
     }),
-    following: publicProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
+    following: protectedProcedure.input(z.object({ userId: z.number() })).query(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) return [];
+      const [settings, viewerFollow] = await Promise.all([
+        database.select().from(userSettings).where(eq(userSettings.userId, input.userId)).limit(1),
+        database.select({ id: follows.id }).from(follows).where(and(eq(follows.followerId, ctx.user.id), eq(follows.followingId, input.userId))).limit(1),
+      ]);
+      if (settings[0]?.showFollowingList === false && ctx.user.id !== input.userId) return [];
+      if (settings[0]?.isPrivate && ctx.user.id !== input.userId && !viewerFollow[0]) return [];
       const res = await database.select({ user: users }).from(follows).innerJoin(users, eq(follows.followingId, users.id)).where(eq(follows.followerId, input.userId));
       return res.map(r => sanitizeAuthUser(r.user));
     }),
@@ -1068,6 +1135,7 @@ export const appRouter = router({
     create: protectedProcedure.input(z.object({ mediaUrl: z.string(), mediaType: z.enum(["image", "video"]).optional() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertUserCanCreateContent(ctx.user.id, "story", input.mediaType === "video" ? "video/mp4" : "image/jpeg");
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const [inserted] = await database.insert(stories).values({ userId: ctx.user.id, mediaUrl: input.mediaUrl, mediaType: input.mediaType || "image", expiresAt });
       return inserted.insertId;

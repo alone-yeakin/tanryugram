@@ -11,7 +11,7 @@ import { initialsAvatar } from "@/lib/mediaUrl";
 import { resolveProfileUser } from "@/lib/profileViewData";
 import { toast } from "sonner";
 import {
-  Bell, Bookmark, Check, ChevronRight, CircleHelp, Compass, CreditCard, Download, Flag, Heart, Home as HomeIcon, ImagePlus, Lock, LogOut, Mail, Menu, MessageCircle, MoreHorizontal, Moon, PhoneCall, PhoneIncoming, PhoneMissed, Play, Plus, Search, Send, Loader2, Settings, Share2, ShieldCheck, Sparkles, Star, Sun, Users, Video, X, Zap,
+  Bell, Bookmark, Check, ChevronRight, CircleHelp, Compass, CreditCard, Download, Flag, Heart, Home as HomeIcon, ImagePlus, Lock, LogOut, Mail, Menu, MessageCircle, MoreHorizontal, Moon, PhoneCall, PhoneIncoming, PhoneMissed, Play, Plus, RefreshCw, Search, Send, Loader2, Settings, Share2, ShieldCheck, Sparkles, Star, Sun, Users, Video, X, Zap,
 } from "lucide-react";
 import { LoginPanel, AdminView, AccountSettings, ReelSubmissionCard } from "@/components/TanryugramPanels";
 import { AdvancedMessagesView, MultiImageComposer, ReactionButton, StoryBarLive, StoryViewerLive } from "@/components/TanryugramAdvancedFeatures";
@@ -43,7 +43,7 @@ const fallbackCreators = [
   { name: "Sofia Reed", username: "sofiareed", role: "Stylist & writer", avatar: "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=96&q=80", verified: true, followers: "42.1k" },
 ];
 
-type View = "home" | "explore" | "messages" | "profile" | "admin";
+type View = "home" | "explore" | "messages" | "profile" | "admin" | "reload";
 
 function Avatar({ src, size = "md", ring = false, name }: { src?: string | null; size?: "sm" | "md" | "lg"; ring?: boolean; name?: string | null }) {
   const sizes = { sm: "h-8 w-8", md: "h-10 w-10", lg: "h-20 w-20" };
@@ -60,7 +60,7 @@ function ContactsCard({ contacts, onOpenMessages }: { contacts: typeof fallbackC
   return <section className="mb-6 rounded-[28px] border border-border/70 bg-card/80 p-4 shadow-sm sm:p-5"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-violet-500">Your people</p><h2 className="mt-1 font-display text-lg font-semibold">Contacts</h2><p className="mt-1 text-xs text-muted-foreground">Presence and calling stay synced through Messages.</p></div><button onClick={onOpenMessages} className="rounded-full border border-border px-3 py-2 text-[10px] font-bold hover:border-violet-400 hover:text-violet-600">Open messages</button></div><div className="grid gap-2 sm:grid-cols-3">{contacts.map((contact) => <div key={contact.username} className="flex items-center gap-3 rounded-2xl bg-muted/55 p-3"><div className="relative"><Avatar src={contact.avatar} size="sm" name={contact.name} /><span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-emerald-500" title="Presence is shared when available" /></div><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{contact.name}</p><p className="truncate text-[10px] text-emerald-600 dark:text-emerald-300">Available to connect</p></div><div className="flex items-center gap-1"><button onClick={onOpenMessages} aria-label={`Audio call ${contact.name}`} className="rounded-full p-2 text-muted-foreground hover:bg-card hover:text-violet-600"><PhoneCall className="h-3.5 w-3.5" /></button><button onClick={onOpenMessages} aria-label={`Video call ${contact.name}`} className="rounded-full p-2 text-muted-foreground hover:bg-card hover:text-violet-600"><Video className="h-3.5 w-3.5" /></button></div></div>)}</div><p className="mt-3 text-[10px] text-muted-foreground">Call buttons open the shared conversation space, where the current peer and WebRTC controls are established.</p></section>; }
 
 function NavItem({ icon: Icon, label, active, onClick, badge }: { icon: typeof HomeIcon; label: string; active: boolean; onClick: () => void; badge?: number }) {
-  return <button onClick={onClick} className={`group relative flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition-all duration-200 active:scale-[.98] ${active ? "bg-foreground text-background shadow-lg shadow-foreground/10" : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"}`}><Icon className={`h-[18px] w-[18px] ${active ? "stroke-[2.5]" : ""}`} /><span>{label}</span>{badge ? <span className={`ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold ${active ? "bg-background text-foreground" : "bg-violet-500 text-white"}`}>{badge}</span> : null}</button>;
+  return <button onClick={onClick} className={`group relative flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition-all duration-200 active:scale-[.98] ${active ? "bg-foreground text-background shadow-lg shadow-foreground/10" : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"}`}><Icon className={`h-[18px] w-[18px] ${active ? "stroke-[2.5]" : ""} ${label === "Reloading…" ? "animate-spin" : ""}`} /><span>{label}</span>{badge ? <span className={`ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold ${active ? "bg-background text-foreground" : "bg-violet-500 text-white"}`}>{badge}</span> : null}</button>;
 }
 
 function StoryBar({ onOpen }: { onOpen: (story: typeof fallbackStories[number]) => void }) {
@@ -123,6 +123,7 @@ export default function Home() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
   const [activePeerId, setActivePeerId] = useState<number | null>(null);
   const [activePeer, setActivePeer] = useState<any | null>(null);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -222,6 +223,26 @@ export default function Home() {
   const profileName = visibleProfile?.name || "Tanryugram user";
   const profileHandle = visibleProfile?.username || "creator";
   const profileAvatar = visibleProfile?.avatarUrl || currentUserAvatar;
+  const reloadPlatformData = async () => {
+    if (isReloading) return;
+    setIsReloading(true);
+    try {
+      await Promise.all([
+        feed.refetch(),
+        view === "explore" ? explore.refetch() : Promise.resolve(),
+        ownProfileQuery.refetch(),
+        notificationsQuery.refetch(),
+        unreadNotificationsQuery.refetch(),
+        incomingCallsQuery.refetch(),
+        recentCallsQuery.refetch(),
+      ]);
+      toast.success("TanRyuGram refreshed");
+    } catch {
+      toast.error("Some updates could not be loaded. Please try again.");
+    } finally {
+      setIsReloading(false);
+    }
+  };
 
   const handleLike = (id: number) => { setLiked((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]); if (isAuthenticated) likeMutation.mutate({ postId: id }); };
   const handleSave = (id: number) => { setSaved((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]); if (isAuthenticated) saveMutation.mutate({ postId: id }); };
@@ -230,8 +251,9 @@ export default function Home() {
   const openStorySequence = (selected: any, allStories?: any[]) => { const sequence = allStories?.length ? allStories : [selected]; const selectedIndex = Math.max(0, sequence.findIndex((item) => (item.id && selected.id ? item.id === selected.id : item.handle === selected.handle))); setStorySequence(sequence); setStoryIndex(selectedIndex); setStory(sequence[selectedIndex] || selected); };
   const handleTip = () => { toast("Support Community", { description: "Direct creator support and tips are disabled for this beta." }); };
 
-  const navItems = useMemo(() => [{ icon: HomeIcon, label: "Home", view: "home" as View }, { icon: Compass, label: "Explore", view: "explore" as View }, { icon: MessageCircle, label: "Messages", view: "messages" as View, badge: 2 }, { icon: Bell, label: "Activity", view: "home" as View, badge: unreadCount }, { icon: Users, label: "My profile", view: "profile" as View }], [unreadCount]);
+  const navItems = useMemo(() => [{ icon: HomeIcon, label: "Home", view: "home" as View }, { icon: Compass, label: "Explore", view: "explore" as View }, { icon: MessageCircle, label: "Messages", view: "messages" as View, badge: 2 }, { icon: Bell, label: "Activity", view: "home" as View, badge: unreadCount }, { icon: RefreshCw, label: isReloading ? "Reloading…" : "Reload", view: "reload" as View }, { icon: Users, label: "My profile", view: "profile" as View }], [isReloading, unreadCount]);
   const navigateToView = (nextView: View) => {
+    if (nextView === "reload") { void reloadPlatformData(); return; }
     if (nextView === "profile") setSelectedUser(null);
     setView(nextView);
   };
@@ -519,25 +541,31 @@ function MessagesView({ message, setMessage, profileAvatar, onSend }: { message:
 function EditIcon() { return <span className="text-xs font-semibold">New</span>; }
 
 function ProfileListModal({ title, rows, loading, onClose, onSelectUser }: { title: string; rows?: any[]; loading?: boolean; onClose: () => void; onSelectUser: (user: any) => void }) {
+  const people = (Array.isArray(rows) ? rows : [])
+    .map((row: any) => row?.user ?? row)
+    .filter((person: any) => Number(person?.id) > 0)
+    .map((person: any) => ({ ...person, id: Number(person.id) }));
   return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-foreground/35 p-3 backdrop-blur-sm sm:items-center" onClick={onClose}>
     <div className="max-h-[min(680px,88dvh)] w-full max-w-md overflow-hidden rounded-[28px] border border-border bg-card shadow-2xl" onClick={(event) => event.stopPropagation()}>
       <div className="flex items-center justify-between border-b border-border/70 px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500">Profile</p><h2 className="mt-1 text-lg font-semibold">{title}</h2></div><button onClick={onClose} aria-label={`Close ${title}`} className="rounded-full p-2 hover:bg-muted"><X className="h-4 w-4" /></button></div>
       <div className="max-h-[calc(min(680px,88dvh)-76px)] overflow-y-auto p-4 [overscroll-behavior:contain]">
-        {loading ? <div className="space-y-2">{[1, 2, 3].map((item) => <div key={item} className="h-16 animate-pulse rounded-2xl bg-muted" />)}</div> : rows?.length ? <div className="space-y-2">{rows.map((row: any) => { const person = row.user || row; return <button key={person.id} onClick={() => { onClose(); onSelectUser(person); }} className="flex min-h-16 w-full items-center gap-3 rounded-2xl p-3 text-left transition hover:bg-muted"><Avatar src={person.avatarUrl} size="sm" name={person.name || person.username} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.name || person.username || "TanRyuGram member"}</span><span className="block truncate text-xs text-muted-foreground">@{person.username || "member"}</span></span><ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" /></button>; })}</div> : <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No {title.toLowerCase()} to show yet.</div>}
+        {loading ? <div className="space-y-2">{[1, 2, 3].map((item) => <div key={item} className="h-16 animate-pulse rounded-2xl bg-muted" />)}</div> : people.length ? <div className="space-y-2">{people.map((person: any) => <button key={person.id} onClick={() => { onClose(); onSelectUser(person); }} className="flex min-h-16 w-full items-center gap-3 rounded-2xl p-3 text-left transition hover:bg-muted"><Avatar src={person.avatarUrl} size="sm" name={person.name || person.username} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{person.name || person.username || "TanRyuGram member"}</span><span className="block truncate text-xs text-muted-foreground">@{person.username || "member"}</span></span><ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" /></button>)}</div> : <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No {title.toLowerCase()} to show yet.</div>}
       </div>
     </div>
   </div>;
 }
 function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip, onOpenMessage, onReport, setView }: { profileUser: any; currentUser: any; isAuthenticated: boolean; onLogin: () => void; onTip: () => void; onOpenMessage: (u: any) => void; onReport: () => void; setView: (v: any) => void }) {
-  const profileId = Number(profileUser?.id || 0);
+  const [navigatedProfile, setNavigatedProfile] = useState<any | null>(null);
+  const resolvedProfileUser = navigatedProfile || profileUser;
+  const profileId = Number(resolvedProfileUser?.id || 0);
   const profileQuery = trpc.profile.byId.useQuery({ userId: profileId }, { enabled: profileId > 0, refetchOnWindowFocus: true });
   const deletePostMutation = trpc.admin.deletePost.useMutation();
   const utils = trpc.useUtils();
   
-  const targetUser = resolveProfileUser(profileUser, profileQuery.data?.user);
+  const targetUser = resolveProfileUser(resolvedProfileUser, profileQuery.data?.user);
   const targetUserId = Number(targetUser?.id || profileId || 0);
   const isPrivateProfile = Boolean(profileQuery.data?.privacy?.isPrivate);
-  const allUserPosts = profileQuery.data?.posts || [];
+  const allUserPosts = Array.isArray(profileQuery.data?.posts) ? profileQuery.data.posts : [];
 
   const stats = profileQuery.data?.stats || { followers: 0, following: 0, posts: 0 };
   const bioText = targetUser?.bio || "Creative director, occasional photographer, and believer in sharing the work before it is finished.";
@@ -549,13 +577,14 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
   const [activeListModal, setActiveListModal] = useState<"followers" | "following" | null>(null);
   const [activeTab, setActiveTab] = useState<"posts" | "saved">("posts");
   const savedReelsQuery = trpc.reels.saved.useQuery(undefined, { enabled: isOwnProfile && activeTab === "saved" });
-  const followersQuery = trpc.follows.followers.useQuery({ userId: targetUserId }, { enabled: targetUserId > 0 && activeListModal === "followers" });
-  const followingQuery = trpc.follows.following.useQuery({ userId: targetUserId }, { enabled: targetUserId > 0 && activeListModal === "following" });
-  const followStateQuery = (trpc.follows as any).state.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && !isOwnProfile && targetUserId > 0 });
-  const followRequestQuery = (trpc.follows as any).requestState.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && !isOwnProfile && targetUserId > 0 });
+  const followersQuery = trpc.follows.followers.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && targetUserId > 0 && activeListModal === "followers" });
+  const followingQuery = trpc.follows.following.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && targetUserId > 0 && activeListModal === "following" });
+  const followStateQuery = trpc.follows.state.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && !isOwnProfile && targetUserId > 0 });
+  const followRequestQuery = trpc.follows.requestState.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && !isOwnProfile && targetUserId > 0 });
   const toggleFollowMutation = trpc.follows.toggle.useMutation();
-  const isFollowing = Boolean(followStateQuery.data);
-  const requestPending = Boolean(followRequestQuery.data);
+  const [followOverride, setFollowOverride] = useState<{ userId: number; following: boolean; requestPending: boolean } | null>(null);
+  const isFollowing = followOverride?.userId === targetUserId ? followOverride.following : Boolean(followStateQuery.data);
+  const requestPending = followOverride?.userId === targetUserId ? followOverride.requestPending : Boolean(followRequestQuery.data);
   const canSeePrivateProfile = !isPrivateProfile || isOwnProfile || isFollowing;
   const userPosts = canSeePrivateProfile ? allUserPosts : [];
   const canViewFollowers = canSeePrivateProfile && (isOwnProfile || targetUser?.showFollowersList !== false);
@@ -567,16 +596,24 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
       return;
     }
     if (targetUserId <= 0 || toggleFollowMutation.isPending) return;
+    const followInput = { userId: targetUserId };
+    setFollowOverride({ userId: targetUserId, following: requestPending ? false : !isFollowing, requestPending: false });
     toggleFollowMutation.mutate({ followingId: targetUserId }, {
       onSuccess: (result) => {
-        followStateQuery.refetch();
-        (utils.profile as any).byId.invalidate({ username: handle });
+        setFollowOverride({ userId: targetUserId, following: result.following, requestPending: result.requestPending });
+        utils.profile.byId.invalidate({ userId: targetUserId });
         utils.follows.followers.invalidate({ userId: targetUserId });
         utils.follows.following.invalidate({ userId: targetUserId });
-        followRequestQuery.refetch();
         toast.success(result.requestPending ? `Follow request sent to @${handle}` : result.following ? `You are now following @${handle}` : `You unfollowed @${handle}`);
       },
-      onError: (error: any) => toast.error(error.message),
+      onError: (error: any) => {
+        setFollowOverride(null);
+        toast.error(error.message);
+      },
+      onSettled: () => {
+        utils.follows.state.invalidate(followInput);
+        utils.follows.requestState.invalidate(followInput);
+      },
     });
   };
 
@@ -685,8 +722,8 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
           )
         )}
       </div>
-      {activeListModal === "followers" && <ProfileListModal title="Followers" rows={followersQuery.data} loading={followersQuery.isLoading} onClose={() => setActiveListModal(null)} onSelectUser={(person) => { window.history.pushState({}, "", `/profile/${person.id}`); window.dispatchEvent(new PopStateEvent("popstate")); }} />}
-      {activeListModal === "following" && <ProfileListModal title="Following" rows={followingQuery.data} loading={followingQuery.isLoading} onClose={() => setActiveListModal(null)} onSelectUser={(person) => { window.history.pushState({}, "", `/profile/${person.id}`); window.dispatchEvent(new PopStateEvent("popstate")); }} />}
+      {activeListModal === "followers" && <ProfileListModal title="Followers" rows={followersQuery.data} loading={followersQuery.isLoading} onClose={() => setActiveListModal(null)} onSelectUser={(person) => { setNavigatedProfile(person); setFollowOverride(null); }} />}
+      {activeListModal === "following" && <ProfileListModal title="Following" rows={followingQuery.data} loading={followingQuery.isLoading} onClose={() => setActiveListModal(null)} onSelectUser={(person) => { setNavigatedProfile(person); setFollowOverride(null); }} />}
     </div>
   );
 }

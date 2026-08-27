@@ -69,6 +69,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const setDisplayedFollowersMutation = trpc.admin.setDisplayedFollowers.useMutation();
   const banUserMutation = trpc.admin.banUser.useMutation();
   const setRoleMutation = trpc.admin.setRole.useMutation();
+  const setUserMediaPermissionsMutation = trpc.admin.setUserMediaPermissions.useMutation();
+  const setContentHiddenMutation = trpc.admin.setContentHidden.useMutation();
   
   const reviewBadgeMutation = trpc.admin.reviewBadgeApplication.useMutation();
   const reviewReportMutation = trpc.admin.reviewReport.useMutation();
@@ -117,6 +119,13 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const updateRecoverySettings = (next: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) => setRecoverySettingsMutation.mutate(next, { onSuccess: (settings: any) => { (utils.admin.getRecoverySettings as any).setData(undefined, settings); setWhatsappNumber(settings.whatsappSupportNumber); (utils.recovery.settings as any).invalidate(); toast.success("Recovery support settings updated"); }, onError: (error: any) => toast.error(error.message) });
   const toggleMaintenance = (enabled: boolean) => setMaintenanceMutation.mutate({ enabled }, { onSuccess: () => { marketplaceSettingsQuery.refetch(); toast.success(`Maintenance mode ${enabled ? "enabled" : "disabled"}`); }, onError: (error: any) => toast.error(error.message) });
   const assignBadge = (userId: number, badgeType: string, isSecondary = false) => setBadgeMutation.mutate({ userId, badgeType: badgeType as "none" | "blue" | "black" | "gold" | "vip" | "founder" | "legend", isSecondary }, { onSuccess: () => { usersQuery.refetch(); toast.success(`${isSecondary ? "Secondary" : "Primary"} badge updated`); }, onError: (error: any) => toast.error(error.message || "Could not update badge") });
+  const updateUserPublishingAccess = (targetUser: any, patch: Partial<{ postsEnabled: boolean; photosEnabled: boolean; videosEnabled: boolean; reelsEnabled: boolean; storiesEnabled: boolean }>) => {
+    const current = targetUser.mediaPermissions || { postsEnabled: true, photosEnabled: true, videosEnabled: true, reelsEnabled: true, storiesEnabled: true };
+    setUserMediaPermissionsMutation.mutate({ userId: targetUser.id, ...current, ...patch }, {
+      onSuccess: () => { usersQuery.refetch(); toast.success("Publishing access updated"); },
+      onError: (error: any) => toast.error(error.message || "Could not update publishing access"),
+    });
+  };
 
   const tabs = [
     { id: "overview", label: "Overview", icon: ShieldCheck },
@@ -311,6 +320,25 @@ export function AdminView({ onTip }: { onTip: () => void }) {
                               <label className="flex items-center gap-1 rounded-lg bg-muted px-2 py-1 text-[9px] font-bold uppercase text-muted-foreground">Secondary<select value={u.secondaryBadgeType || "none"} onChange={(event) => assignBadge(u.id, event.target.value, true)} className="max-w-[92px] bg-transparent text-[9px] font-bold uppercase text-foreground outline-none"><option value="none">None</option><option value="blue">Blue</option><option value="black">Black</option><option value="gold">Gold</option><option value="vip">VIP</option><option value="founder">Founder</option><option value="legend">Legend</option></select></label>
                               <button onClick={() => setCreatorMutation.mutate({ userId: u.id, value: !u.isCreator }, { onSuccess: () => usersQuery.refetch() })} className={`rounded-lg px-2 py-1 text-[9px] font-bold uppercase transition ${u.isCreator ? "bg-violet-500 text-white" : "bg-muted text-muted-foreground"}`}>Creator</button>
                               <button onClick={() => banUserMutation.mutate({ userId: u.id, value: !u.isBanned }, { onSuccess: () => usersQuery.refetch() })} className={`rounded-lg px-2 py-1 text-[9px] font-bold uppercase transition ${u.isBanned ? "bg-rose-500 text-white" : "bg-muted text-muted-foreground"}`}>{u.isBanned ? "Unban" : "Ban"}</button>
+                            </div>
+                            <div className="mt-3 border-t border-border/60 pt-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Publishing access</p>
+                                <button type="button" disabled={setContentHiddenMutation.isPending} onClick={() => setContentHiddenMutation.mutate({ userId: u.id, value: !u.contentHidden }, { onSuccess: () => { usersQuery.refetch(); toast.success(u.contentHidden ? "Account publishing resumed" : "Account publishing paused"); }, onError: (error: any) => toast.error(error.message || "Could not update account access") })} className={`rounded-lg px-2 py-1 text-[9px] font-bold uppercase transition disabled:opacity-50 ${u.contentHidden ? "bg-rose-600 text-white" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}`}>{u.contentHidden ? "Paused" : "Active"}</button>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {([
+                                  ["postsEnabled", "Posts"],
+                                  ["photosEnabled", "Photos"],
+                                  ["videosEnabled", "Videos"],
+                                  ["reelsEnabled", "Reels"],
+                                  ["storiesEnabled", "Stories"],
+                                ] as const).map(([key, label]) => {
+                                  const enabled = u.mediaPermissions?.[key] ?? true;
+                                  return <button key={key} type="button" disabled={setUserMediaPermissionsMutation.isPending} onClick={() => updateUserPublishingAccess(u, { [key]: !enabled })} className={`rounded-lg px-2 py-1 text-[9px] font-bold uppercase transition disabled:opacity-50 ${enabled ? "bg-violet-500/10 text-violet-700 dark:text-violet-300" : "bg-muted text-muted-foreground line-through"}`}>{label}</button>;
+                                })}
+                              </div>
+                              <p className="mt-2 text-[9px] leading-4 text-muted-foreground">Disable individual media types or pause this account’s publishing entirely. Account restrictions are enforced by the server.</p>
                             </div>
                           </div>
                         </div>

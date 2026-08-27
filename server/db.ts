@@ -59,7 +59,22 @@ export async function getUserById(id: number) {
 export async function getUsers() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(users).orderBy(desc(users.createdAt));
+  const [userRows, permissionRows] = await Promise.all([
+    db.select().from(users).orderBy(desc(users.createdAt)),
+    db.select().from(userMediaPermissions),
+  ]);
+  const permissionsByUserId = new Map(permissionRows.map((permission) => [permission.userId, permission]));
+  return userRows.map((user) => ({
+    ...user,
+    mediaPermissions: permissionsByUserId.get(user.id) ?? {
+      userId: user.id,
+      postsEnabled: true,
+      photosEnabled: true,
+      videosEnabled: true,
+      reelsEnabled: true,
+      storiesEnabled: true,
+    },
+  }));
 }
 
 export async function upsertUser(data: InsertUser) {
