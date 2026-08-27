@@ -26,13 +26,15 @@ export async function getDb() {
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return null;
-  return db.query.users.findFirst({ where: eq(users.openId, openId) });
+  const user = (await db.select().from(users).where(eq(users.openId, openId)).limit(1))[0];
+  return user || null;
 }
 
 export async function getUserById(id: number) {
   const db = await getDb();
   if (!db) return null;
-  return db.query.users.findFirst({ where: eq(users.id, id) });
+  const user = (await db.select().from(users).where(eq(users.id, id)).limit(1))[0];
+  return user || null;
 }
 
 export async function getUsers() {
@@ -137,14 +139,14 @@ export async function reviewBadgeApplication(applicationId: number, reviewerId: 
 export async function getMediaUploadPolicy() {
   const db = await getDb();
   if (!db) return { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
-  const policy = await db.query.mediaUploadPolicy.findFirst();
+  const policy = (await db.select().from(mediaUploadPolicy).limit(1))[0];
   return policy || { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
 }
 
 export async function setMediaUploadPolicy(policy: { photosEnabled: boolean; profilePhotosEnabled: boolean; videosEnabled: boolean }, userId: number) {
   const db = await getDb();
   if (!db) return;
-  const existing = await db.query.mediaUploadPolicy.findFirst();
+  const existing = (await db.select().from(mediaUploadPolicy).limit(1))[0];
   if (existing) {
     await db.update(mediaUploadPolicy).set({ ...policy, updatedBy: userId }).where(eq(mediaUploadPolicy.id, existing.id));
   } else {
@@ -156,14 +158,14 @@ export async function setMediaUploadPolicy(policy: { photosEnabled: boolean; pro
 export async function getEmailDeliverySettings() {
   const db = await getDb();
   if (!db) return { emailDeliveryEnabled: true, signupVerificationEnabled: false, appScriptLoginEnabled: false, appScriptResetEnabled: false };
-  const settings = await db.query.emailDeliverySettings.findFirst();
+  const settings = (await db.select().from(emailDeliverySettings).limit(1))[0];
   return settings || { emailDeliveryEnabled: true, signupVerificationEnabled: false, appScriptLoginEnabled: false, appScriptResetEnabled: false };
 }
 
 export async function setEmailDeliverySettings(settings: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean }, userId: number) {
   const db = await getDb();
   if (!db) return;
-  const existing = await db.query.emailDeliverySettings.findFirst();
+  const existing = (await db.select().from(emailDeliverySettings).limit(1))[0];
   if (existing) {
     await db.update(emailDeliverySettings).set({ ...settings, updatedBy: userId }).where(eq(emailDeliverySettings.id, existing.id));
   } else {
@@ -175,14 +177,14 @@ export async function setEmailDeliverySettings(settings: { emailDeliveryEnabled:
 export async function getPlatformPaymentSettings() {
   const db = await getDb();
   if (!db) return { paypalEmail: null, bkashNumber: null, nagadNumber: null, instructions: null };
-  const settings = await db.query.platformPaymentSettings.findFirst();
+  const settings = (await db.select().from(platformPaymentSettings).limit(1))[0];
   return settings || { paypalEmail: null, bkashNumber: null, nagadNumber: null, instructions: null };
 }
 
 export async function setPlatformPaymentSettings(settings: { paypalEmail?: string | null; bkashNumber?: string | null; nagadNumber?: string | null; instructions?: string | null }, userId: number) {
   const db = await getDb();
   if (!db) return;
-  const existing = await db.query.platformPaymentSettings.findFirst();
+  const existing = (await db.select().from(platformPaymentSettings).limit(1))[0];
   if (existing) {
     await db.update(platformPaymentSettings).set({ ...settings, updatedBy: userId }).where(eq(platformPaymentSettings.id, existing.id));
   } else {
@@ -194,14 +196,14 @@ export async function setPlatformPaymentSettings(settings: { paypalEmail?: strin
 export async function getPlatformSettings() {
   const db = await getDb();
   if (!db) return { eventTheme: null };
-  const settings = await db.query.platformSettings.findFirst();
+  const settings = (await db.select().from(platformSettings).limit(1))[0];
   return settings || { eventTheme: null };
 }
 
 export async function setPlatformSetting(settings: { eventTheme: string | null }, userId: number) {
   const db = await getDb();
   if (!db) return;
-  const existing = await db.query.platformSettings.findFirst();
+  const existing = (await db.select().from(platformSettings).limit(1))[0];
   if (existing) {
     await db.update(platformSettings).set({ ...settings, updatedBy: userId }).where(eq(platformSettings.id, existing.id));
   } else {
@@ -213,13 +215,13 @@ export async function setPlatformSetting(settings: { eventTheme: string | null }
 export async function getBadgeMarketplaceSettings() {
   const db = await getDb();
   if (!db) return [];
-  return await db.query.badgeMarketplaceSettings.findMany();
+  return await db.select().from(badgeMarketplaceSettings);
 }
 
 export async function setBadgeMarketplaceSetting(badgeType: "blue" | "black" | "gold" | "vip" | "founder" | "legend", isPaid: boolean, price: string, userId: number) {
   const db = await getDb();
   if (!db) return;
-  const existing = await db.query.badgeMarketplaceSettings.findFirst({ where: eq(badgeMarketplaceSettings.badgeType, badgeType) });
+  const existing = (await db.select().from(badgeMarketplaceSettings).where(eq(badgeMarketplaceSettings.badgeType, badgeType)).limit(1))[0];
   if (existing) {
     await db.update(badgeMarketplaceSettings).set({ isPaid, price, updatedBy: userId }).where(eq(badgeMarketplaceSettings.badgeType, badgeType));
   } else {
@@ -272,7 +274,7 @@ export async function getPosts() {
 export async function deletePostAsUser(postId: number, userId: number, isAdmin: boolean) {
   const db = await getDb();
   if (!db) return;
-  const post = await db.query.posts.findFirst({ where: eq(posts.id, postId) });
+  const post = (await db.select().from(posts).where(eq(posts.id, postId)).limit(1))[0];
   if (!post) throw new TRPCError({ code: "NOT_FOUND", message: "Post not found" });
   if (!isAdmin && post.userId !== userId) throw new TRPCError({ code: "FORBIDDEN", message: "You can only delete your own posts" });
   await db.delete(postMedia).where(eq(postMedia.postId, postId));
@@ -335,7 +337,7 @@ export async function reviewAppeal(appealId: number, actorId: number, status: "a
 export async function getUserMediaPermissions(userId: number) {
   const db = await getDb();
   if (!db) return { postsEnabled: true, photosEnabled: true, videosEnabled: true, reelsEnabled: true, storiesEnabled: true };
-  const perms = await db.query.userMediaPermissions.findFirst({ where: eq(userMediaPermissions.userId, userId) });
+  const perms = (await db.select().from(userMediaPermissions).where(eq(userMediaPermissions.userId, userId)).limit(1))[0];
   return perms || { postsEnabled: true, photosEnabled: true, videosEnabled: true, reelsEnabled: true, storiesEnabled: true };
 }
 
@@ -361,14 +363,14 @@ export async function updateConversationSettings(userId: number, peerId: number,
 export async function getRecoverySupportSettings() {
   const db = await getDb();
   if (!db) return { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
-  const settings = await db.query.recoverySupportSettings.findFirst();
+  const settings = (await db.select().from(recoverySupportSettings).limit(1))[0];
   return settings || { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
 }
 
 export async function setRecoverySupportSettings(settings: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }, userId: number) {
   const db = await getDb();
   if (!db) return;
-  const existing = await db.query.recoverySupportSettings.findFirst();
+  const existing = (await db.select().from(recoverySupportSettings).limit(1))[0];
   if (existing) {
     await db.update(recoverySupportSettings).set({ ...settings, updatedBy: userId }).where(eq(recoverySupportSettings.id, existing.id));
   } else {
@@ -380,11 +382,20 @@ export async function setRecoverySupportSettings(settings: { guestRecoveryEnable
 export async function getRecoveryInbox() {
   const db = await getDb();
   if (!db) return [];
-  return db.query.recoverySupportRequests.findMany({
-    with: { messages: true },
-    orderBy: [desc(recoverySupportRequests.lastMessageAt), desc(recoverySupportRequests.createdAt)],
-    limit: 50
-  });
+  const requests = await db.select().from(recoverySupportRequests).orderBy(desc(recoverySupportRequests.lastMessageAt), desc(recoverySupportRequests.createdAt)).limit(50);
+  if (!requests.length) return [];
+  
+  const requestIds = requests.map(r => r.id);
+  const msgs = await db.select().from(recoverySupportMessages).where(inArray(recoverySupportMessages.requestId, requestIds)).orderBy(asc(recoverySupportMessages.createdAt));
+  
+  const messagesByRequestId = new Map<number, (typeof recoverySupportMessages.$inferSelect)[]>();
+  for (const m of msgs) {
+    const existing = messagesByRequestId.get(m.requestId) ?? [];
+    existing.push(m);
+    messagesByRequestId.set(m.requestId, existing);
+  }
+  
+  return requests.map(r => ({ ...r, messages: messagesByRequestId.get(r.id) ?? [] }));
 }
 
 export async function replyRecovery(requestId: number, body: string) {

@@ -165,11 +165,11 @@ export default function Home() {
     nativeBridge?.postMessage(JSON.stringify({ type: "incoming-call", callId, callType: pendingCall.call.callType, callerName: pendingCall.caller?.name || "TanRyuGram member" }));
   }, [isAuthenticated, pendingCall]);
   useEffect(() => {
-    const refreshCalls = () => incomingCallsQuery.refetch();
+    const refreshCalls = () => { if (isAuthenticated) incomingCallsQuery.refetch(); };
     window.addEventListener("focus", refreshCalls);
     document.addEventListener("visibilitychange", refreshCalls);
     return () => { window.removeEventListener("focus", refreshCalls); document.removeEventListener("visibilitychange", refreshCalls); };
-  }, [incomingCallsQuery]);
+  }, [incomingCallsQuery, isAuthenticated]);
   useEffect(() => {
     const nativeBridge = (window as Window & { ReactNativeWebView?: { postMessage: (message: string) => void } }).ReactNativeWebView;
     nativeBridge?.postMessage(JSON.stringify({ type: "auth-state", authenticated: isAuthenticated, loading: authLoading, sessionExpired, userName: user?.name || null }));

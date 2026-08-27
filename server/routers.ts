@@ -155,12 +155,12 @@ export const appRouter = router({
     }),
   }),
   profile: router({
-    byId: publicProcedure.input(z.object({ username: z.string().optional(), userId: z.number().optional() })).query(async ({ input }) => {
-      const database = await db.getDb();
-      if (!database) return null;
-      const user = input.userId ? await db.getUserById(input.userId) : await database.query.users.findFirst({ where: eq(users.username, input.username!) });
-      return { user: sanitizeAuthUser(user), posts: [], stats: { followers: 0, following: 0, posts: 0 }, privacy: { isPrivate: false } };
-    }),
+	    byId: publicProcedure.input(z.object({ username: z.string().optional(), userId: z.number().optional() })).query(async ({ input }) => {
+	      const database = await db.getDb();
+	      if (!database) return null;
+	      const user = input.userId ? await db.getUserById(input.userId) : (await database.select().from(users).where(eq(users.username, input.username!)).limit(1))[0];
+	      return { user: sanitizeAuthUser(user), posts: [], stats: { followers: 0, following: 0, posts: 0 }, privacy: { isPrivate: false } };
+	    }),
     update: protectedProcedure.input(z.object({ 
       themeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
       customTextColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
@@ -208,21 +208,24 @@ export const appRouter = router({
       await database.insert(recoverySupportRequests).values({ guestLabel: input.guestLabel || "Guest", accountEmail: input.accountEmail || null, guestTokenHash: createHash("sha256").update(token).digest("hex"), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
       return { guestToken };
     }),
-    thread: publicProcedure.input(z.object({ guestToken: z.string() })).query(async ({ input }) => {
-      const database = await db.getDb();
-      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const req = await database.query.recoverySupportRequests.findFirst({ where: eq(recoverySupportRequests.guestTokenHash, createHash("sha256").update(input.guestToken).digest("hex")), with: { messages: true } });
-      if (!req) throw new TRPCError({ code: "NOT_FOUND" });
-      return { ...req, messages: req.messages || [] };
-    }),
-    sendMessage: publicProcedure.input(z.object({ guestToken: z.string(), body: z.string().min(1) })).mutation(async ({ input }) => {
-      const database = await db.getDb();
-      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const req = await database.query.recoverySupportRequests.findFirst({ where: eq(recoverySupportRequests.guestTokenHash, createHash("sha256").update(input.guestToken).digest("hex")) });
-      if (!req) throw new TRPCError({ code: "NOT_FOUND" });
-      await database.insert(recoverySupportMessages).values({ requestId: req.id, senderType: "guest", body: input.body });
-      await database.update(recoverySupportRequests).set({ lastMessageAt: new Date() }).where(eq(recoverySupportRequests.id, req.id));
-    }),
+	    thread: publicProcedure.input(z.object({ guestToken: z.string() })).query(async ({ input }) => {
+	      const database = await db.getDb();
+	      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+	      const tokenHash = createHash("sha256").update(input.guestToken).digest("hex");
+	      const req = (await database.select().from(recoverySupportRequests).where(eq(recoverySupportRequests.guestTokenHash, tokenHash)).limit(1))[0];
+	      if (!req) throw new TRPCError({ code: "NOT_FOUND" });
+	      const msgs = await database.select().from(recoverySupportMessages).where(eq(recoverySupportMessages.requestId, req.id)).orderBy(asc(recoverySupportMessages.createdAt));
+	      return { ...req, messages: msgs };
+	    }),
+	    sendMessage: publicProcedure.input(z.object({ guestToken: z.string(), body: z.string().min(1) })).mutation(async ({ input }) => {
+	      const database = await db.getDb();
+	      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+	      const tokenHash = createHash("sha256").update(input.guestToken).digest("hex");
+	      const req = (await database.select().from(recoverySupportRequests).where(eq(recoverySupportRequests.guestTokenHash, tokenHash)).limit(1))[0];
+	      if (!req) throw new TRPCError({ code: "NOT_FOUND" });
+	      await database.insert(recoverySupportMessages).values({ requestId: req.id, senderType: "guest", body: input.body });
+	      await database.update(recoverySupportRequests).set({ lastMessageAt: new Date() }).where(eq(recoverySupportRequests.id, req.id));
+	    }),
   }),
   admin: router({
     getBadgeApplications: adminOnly.query(async () => await db.getBadgeApplications()),

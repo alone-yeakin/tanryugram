@@ -660,3 +660,13 @@
 - [x] Run release-path regression tests and production build validation — build and type-check passed
 - [x] Save and publish the release-ready checkpoint
 - [x] Deliver release report and request mobile retest before the 12 AM deadline
+
+## Final Release Audit & Repair
+
+- [x] Audit public-page query hooks and account-lookup logic for reproducible session and database failures — hardened Home.tsx refetches and converted relational queries to explicit selects
+- [x] Ensure all protected procedures on the landing page are session-gated and handle missing data gracefully
+- [x] Harden account-lookup mutations to provide clear feedback and prevent unhandled database exceptions — added idx_users_email for stability
+- [x] Add regression coverage for public startup safety and account lookup failures — 6 focused tests passed
+- [x] Run release-path tests, TypeScript, production build, and production RPC validation — all passed
+- [x] Save and publish the final release checkpoint
+- [x] Deliver release report and request mobile/browser cache-cleared retest
