@@ -215,7 +215,13 @@ export async function setPlatformSetting(settings: { eventTheme?: string | null;
 export async function getBadgeMarketplaceSettings() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(badgeMarketplaceSettings);
+  try {
+    return await db.select().from(badgeMarketplaceSettings);
+  } catch (err) {
+    console.error("Badge marketplace settings select failed, trying raw SQL fallback:", err);
+    const res = await db.execute(sql`select id, badgeType, isPaid, price, updatedBy, updatedAt from badgeMarketplaceSettings`);
+    return (res[0] as unknown) as any[];
+  }
 }
 
 export async function setBadgeMarketplaceSetting(badgeType: "blue" | "black" | "gold" | "vip" | "founder" | "legend", isPaid: boolean, price: string, userId: number) {
@@ -258,11 +264,20 @@ export async function getPosts() {
   // Avoid Drizzle's relational JSON/LATERAL query here. Some deployed MySQL-compatible
   // runtimes reject that generated SQL even though the underlying tables are healthy.
   // Explicit batched selects keep the public feed portable and retain the same contract.
-  const postRows = await db.select().from(posts).orderBy(desc(posts.createdAt));
+  let postRows: any[] = [];
+  try {
+    postRows = await db.select().from(posts).orderBy(desc(posts.createdAt));
+  } catch (err) {
+    console.error("Posts select failed, trying raw SQL fallback:", err);
+    const res = await db.execute(sql`select id, userId, caption, mediaUrl, mediaType, isPremium, location, feeling, taggedUsers, likesCount, commentsCount, isHidden, createdAt from posts order by createdAt desc`);
+    postRows = (res[0] as unknown) as any[];
+  }
+
   if (!postRows.length) return [];
 
   const postIds = postRows.map((post) => post.id);
   const userIds = Array.from(new Set(postRows.map((post) => post.userId).filter((id): id is number => Number.isFinite(id))));
+
   const [mediaRows, userRows] = await Promise.all([
     postIds.length ? db.select().from(postMedia).where(inArray(postMedia.postId, postIds)).orderBy(asc(postMedia.sortOrder)) : Promise.resolve([]),
     userIds.length ? db.select().from(users).where(inArray(users.id, userIds)) : Promise.resolve([]),

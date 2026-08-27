@@ -693,7 +693,7 @@
 
 ## Final Release Audit & Database Repair
 
-- [x] Repair the public marketplace and post-feed database failures by converting relational queries to explicit selects
+- [x] Repair the public marketplace and post-feed database failures by converting relational queries to explicit selects and adding raw SQL fallbacks
 - [x] Harden public startup error handling to prevent "Please login" errors on the landing page
 - [x] Add regression coverage for the repaired public paths and production build validation
 - [x] Save and publish the final stable checkpoint
