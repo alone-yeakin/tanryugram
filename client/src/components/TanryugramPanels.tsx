@@ -53,6 +53,7 @@ export function ReelSubmissionCard() {
 
 export function AdminView({ onTip }: { onTip: () => void }) {
   const [activeTab, setActiveTab] = useState<"overview" | "governance" | "content" | "users" | "analytics" | "system">("overview");
+  const [showAdvancedTools, setShowAdvancedTools] = useState(false);
   const usersQuery = trpc.admin.users.list.useQuery();
   const postsQuery = trpc.admin.posts.list.useQuery();
   const reportsQuery = trpc.admin.reports.list.useQuery();
@@ -71,6 +72,7 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const setRoleMutation = trpc.admin.setRole.useMutation();
   const setUserMediaPermissionsMutation = trpc.admin.setUserMediaPermissions.useMutation();
   const setContentHiddenMutation = trpc.admin.setContentHidden.useMutation();
+  const resetUserPasswordMutation = trpc.admin.resetUserPassword.useMutation();
   
   const reviewBadgeMutation = trpc.admin.reviewBadgeApplication.useMutation();
   const reviewReportMutation = trpc.admin.reviewReport.useMutation();
@@ -111,6 +113,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const recoverySettings = recoverySettingsQuery.data || { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
   const [whatsappNumber, setWhatsappNumber] = useState(recoverySettings.whatsappSupportNumber);
   const [recoveryReplies, setRecoveryReplies] = useState<Record<number, string>>({});
+  const [resetUserId, setResetUserId] = useState("0");
+  const [ownerResetPassword, setOwnerResetPassword] = useState("");
   const [geminiChatMessages, setGeminiChatMessages] = useState<GeminiChatMessage[]>([{ role: "assistant", content: "I’m your private TanRyuGram Creator Studio assistant. Ask me about features, settings, troubleshooting, or a safe implementation plan. I will explain what needs review and will never claim that source code was changed unless it actually was." }]);
   const [showBugReport, setShowBugReport] = useState(false);
 
@@ -127,45 +131,39 @@ export function AdminView({ onTip }: { onTip: () => void }) {
     });
   };
 
-  const tabs = [
-    { id: "overview", label: "Overview", icon: ShieldCheck },
-    { id: "governance", label: "Governance", icon: Lock },
-    { id: "users", label: "Users", icon: UserCheck },
-    { id: "content", label: "Content", icon: Video },
-    { id: "analytics", label: "Analytics", icon: Sparkles },
-    { id: "system", label: "System", icon: Archive },
+  const coreTabs = [
+    { id: "overview", label: "Dashboard", icon: ShieldCheck },
+    { id: "users", label: "Users & Passwords", icon: UserCheck },
+    { id: "governance", label: "Platform Settings", icon: Lock },
+  ];
+  const advancedTabs = [
+    { id: "content", label: "Content & Safety", icon: Video },
+    { id: "analytics", label: "Promotion & Analytics", icon: Sparkles },
+    { id: "system", label: "Audit Log", icon: Archive },
   ];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="flex flex-col lg:flex-row">
-        {/* Sidebar */}
-        <aside className="w-full shrink-0 border-b border-border bg-card lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r">
-          <div className="p-6">
-            <h2 className="font-display text-2xl font-bold tracking-tight text-violet-600">Creator Studio</h2>
-            <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Owner Space</p>
+      <main className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+        <header className="mb-6 rounded-[28px] border border-border/70 bg-card p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500">Owner controls</p><h2 className="mt-1 font-display text-2xl font-bold tracking-tight">Creator Studio</h2><p className="mt-1 text-xs text-muted-foreground">Your familiar control center. The most-used settings are kept simple and visible.</p></div>
+            <Link href="/" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground"><ArrowRight className="h-4 w-4" />Back to Feed</Link>
           </div>
-          <nav className="space-y-1 px-3 pb-6">
-            {tabs.map((tab) => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${activeTab === tab.id ? "bg-violet-500/10 text-violet-600 dark:text-violet-400" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-                <tab.icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            ))}
-            <div className="pt-4 mt-4 border-t border-border/60">
-              <Link href="/" className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground">
-                <ArrowRight className="h-4 w-4" />
-                Back to Feed
-              </Link>
-            </div>
+          <nav className="mt-5 flex flex-wrap gap-2" aria-label="Creator Studio sections">
+            {coreTabs.map((tab) => <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id as any)} className={`inline-flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${activeTab === tab.id ? "bg-violet-600 text-white shadow-sm" : "border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"}`}><tab.icon className="h-4 w-4" />{tab.label}</button>)}
+            <button type="button" onClick={() => setShowAdvancedTools((visible) => !visible)} className={`inline-flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${showAdvancedTools ? "bg-foreground text-background" : "border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"}`}><Plus className={`h-4 w-4 transition-transform ${showAdvancedTools ? "rotate-45" : ""}`} />Advanced tools</button>
           </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 p-4 sm:p-8">
-          <div className="mx-auto max-w-4xl space-y-8">
+          {showAdvancedTools && <div className="mt-3 flex flex-wrap gap-2 rounded-2xl border border-dashed border-border bg-muted/30 p-3">{advancedTabs.map((tab) => <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id as any)} className={`inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold transition ${activeTab === tab.id ? "bg-violet-600 text-white" : "bg-card text-muted-foreground hover:bg-background hover:text-foreground"}`}><tab.icon className="h-3.5 w-3.5" />{tab.label}</button>)}</div>}
+        </header>
+        <div className="mx-auto max-w-5xl space-y-8">
             {activeTab === "overview" && (
               <>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <button type="button" onClick={() => setActiveTab("users")} className="min-h-24 rounded-2xl border border-violet-300/70 bg-violet-500/5 p-4 text-left transition hover:bg-violet-500/10"><UserCheck className="h-4 w-4 text-violet-600" /><p className="mt-2 text-sm font-semibold">Manage users</p><p className="mt-1 text-[11px] text-muted-foreground">Badges, account access, and password resets.</p></button>
+                  <button type="button" onClick={() => setActiveTab("governance")} className="min-h-24 rounded-2xl border border-border bg-card p-4 text-left transition hover:bg-muted"><Lock className="h-4 w-4 text-emerald-600" /><p className="mt-2 text-sm font-semibold">Platform settings</p><p className="mt-1 text-[11px] text-muted-foreground">Uploads, verification, recovery, and themes.</p></button>
+                  <button type="button" onClick={() => setShowAdvancedTools(true)} className="min-h-24 rounded-2xl border border-border bg-card p-4 text-left transition hover:bg-muted"><Sparkles className="h-4 w-4 text-amber-500" /><p className="mt-2 text-sm font-semibold">Advanced tools</p><p className="mt-1 text-[11px] text-muted-foreground">Safety reviews, Reels, promotion, and logs.</p></button>
+                </div>
                 <div className="rounded-[28px] border border-violet-300/70 bg-violet-500/5 p-6 shadow-sm">
                   <h3 className="mb-4 flex items-center gap-2 font-semibold text-violet-700 dark:text-violet-300"><Sparkles className="h-4 w-4" /> AI Platform Assistant</h3>
                   <div className="h-[400px] overflow-hidden rounded-2xl border border-violet-200 bg-card shadow-inner dark:border-violet-900">
@@ -280,6 +278,14 @@ export function AdminView({ onTip }: { onTip: () => void }) {
 
             {activeTab === "users" && (
               <div className="space-y-6">
+                <section className="rounded-[28px] border border-violet-300/70 bg-violet-500/5 p-5 shadow-sm sm:p-6">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-500">Account recovery</p><h3 className="mt-1 font-semibold">Reset a user password</h3><p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">Choose an account and set a temporary password. The previous password is never displayed or saved in the Creator Studio.</p></div><Lock className="h-5 w-5 shrink-0 text-violet-600" /></div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                    <select value={resetUserId} onChange={(event) => setResetUserId(event.target.value)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-xs outline-none focus:border-violet-500"><option value="0">Choose a user</option>{(users as any[]).map((member: any) => <option key={member.id} value={member.id}>{member.name || member.username || `User #${member.id}`} · {member.email || `ID ${member.id}`}</option>)}</select>
+                    <input type="password" autoComplete="new-password" value={ownerResetPassword} onChange={(event) => setOwnerResetPassword(event.target.value)} placeholder="New temporary password (8+ characters)" className="min-h-11 rounded-xl border border-border bg-background px-3 text-xs outline-none focus:border-violet-500" />
+                    <button type="button" disabled={resetUserPasswordMutation.isPending || Number(resetUserId) <= 0 || ownerResetPassword.trim().length < 8} onClick={() => resetUserPasswordMutation.mutate({ userId: Number(resetUserId), newPassword: ownerResetPassword }, { onSuccess: () => { setOwnerResetPassword(""); toast.success("Password reset completed. Share the temporary password privately."); }, onError: (error: any) => toast.error(error.message || "Could not reset this password") })} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">{resetUserPasswordMutation.isPending ? "Resetting…" : "Reset password"}</button>
+                  </div>
+                </section>
                 <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
                   <h3 className="mb-4 font-semibold">Badge Applications</h3>
                   <div className="space-y-3">
@@ -509,9 +515,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
                 </div>
               </div>
             )}
-          </div>
-        </main>
-      </div>
+        </div>
+      </main>
       {showBugReport && <BugReportModal onClose={() => setShowBugReport(false)} />}
     </div>
   );

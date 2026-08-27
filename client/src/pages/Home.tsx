@@ -110,7 +110,10 @@ export default function Home() {
   const { user, isAuthenticated, loading: authLoading, sessionExpired, logout } = useAuth();
   const openNativeLogin = () => toast.info("Sign in with your TanRyuGram email and password.");
   const { theme, toggleTheme } = useTheme();
-  const [view, setView] = useState<View>("home");
+  const [view, setView] = useState<View>(() => {
+    if (typeof window === "undefined") return "home";
+    return new URLSearchParams(window.location.search).get("studio") === "1" ? "admin" : "home";
+  });
   const [liked, setLiked] = useState<number[]>([]);
   const [saved, setSaved] = useState<number[]>([]);
   const [story, setStory] = useState<any | null>(null);

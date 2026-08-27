@@ -17,7 +17,7 @@ import { sendIncomingCallPush } from "./firebaseAdmin";
 import { checkEmailCodeRateLimit } from "./emailRateLimit";
 import { buildUserMigrationArchive, importUserMigrationArchive, inspectUserMigrationArchive, USER_MIGRATION_MAX_BYTES } from "./userMigration";
 import { applySafeGeminiActions, generateGeminiChatReply, generateGeminiFeatureProposal } from "./geminiAssistant";
-import { users, messages, emailVerificationCodes, userSettings, badgeMarketplaceSettings, badgeApplications, platformPaymentSettings, recoverySupportRequests, recoverySupportMessages, contentAppeals, follows, followRequests, reelSubmissions, reelBookmarks, contentReports, reelComments, reelLikes, reelViews, messageReactions, calls, notifications, comments, pushTokens, likes, saves, dailyReelAnalytics, postMedia, reelPromotions, userMediaPermissions, groupMessages, groupEvents, groupPolls, groupPollOptions, groupJoinRequests, groupMembers, groups, groupInviteRequests, typingStatus, groupEventRsvps, groupPollVotes, conversationSettings, posts, stories, storyViews, storyReplies } from "../drizzle/schema";
+import { users, messages, emailVerificationCodes, userSettings, badgeMarketplaceSettings, badgeApplications, platformPaymentSettings, recoverySupportRequests, recoverySupportMessages, contentAppeals, follows, followRequests, reelSubmissions, reelBookmarks, contentReports, reelComments, reelLikes, reelViews, messageReactions, calls, notifications, comments, pushTokens, likes, saves, dailyReelAnalytics, postMedia, reelPromotions, userMediaPermissions, moderationAuditLog, groupMessages, groupEvents, groupPolls, groupPollOptions, groupJoinRequests, groupMembers, groups, groupInviteRequests, typingStatus, groupEventRsvps, groupPollVotes, conversationSettings, posts, stories, storyViews, storyReplies } from "../drizzle/schema";
 
 const stripe = () => {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -329,6 +329,22 @@ export const appRouter = router({
     setRole: adminOnly.input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) })).mutation(async ({ input }) => {
       await db.setUserRole(input.userId, input.role);
     }),
+    resetUserPassword: adminOnly.input(z.object({ userId: z.number(), newPassword: z.string().min(8).max(128) })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [target] = await database.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).limit(1);
+      if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "User account not found." });
+      const passwordHash = Buffer.from(input.newPassword).toString("base64");
+      await database.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, input.userId));
+      await database.insert(moderationAuditLog).values({
+        actorId: ctx.user.id,
+        action: "owner_password_reset",
+        targetType: "account",
+        targetId: input.userId,
+        details: "Owner reset the account password. The password value is never stored in this log.",
+      });
+      return { success: true };
+    }),
     setUserMediaPermissions: adminOnly.input(z.object({ userId: z.number(), postsEnabled: z.boolean(), photosEnabled: z.boolean(), videosEnabled: z.boolean(), reelsEnabled: z.boolean(), storiesEnabled: z.boolean() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -368,7 +384,7 @@ export const appRouter = router({
       invalidate: adminOnly.query(async () => null),
     }),
     users: router({
-      list: adminOnly.query(async () => await db.getUsers()),
+      list: adminOnly.query(async () => (await db.getUsers()).map(sanitizeAuthUser)),
       invalidate: adminOnly.query(async () => null),
     }),
     reports: router({
