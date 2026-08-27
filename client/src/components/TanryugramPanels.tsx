@@ -52,19 +52,30 @@ export function ReelSubmissionCard() {
 }
 
 export function AdminView({ onTip }: { onTip: () => void }) {
+  const [activeTab, setActiveTab] = useState<"overview" | "governance" | "content" | "users" | "analytics" | "system">("overview");
   const usersQuery = trpc.admin.users.list.useQuery();
   const postsQuery = trpc.admin.posts.list.useQuery();
   const reportsQuery = trpc.admin.reports.list.useQuery();
   const reelsQuery = trpc.admin.getReels.useQuery();
   const appealsQuery = trpc.admin.getAppeals.useQuery();
   const auditLogQuery = trpc.admin.getAuditLog.useQuery();
+  const reelsPromotionsQuery = trpc.admin.reelsPromotions.useQuery();
+  const reelsAnalyticsQuery = trpc.admin.reelsAnalytics.useQuery();
+  
   const setBadgeMutation = trpc.admin.setBadge.useMutation();
   const setCreatorMutation = trpc.admin.setCreator.useMutation();
+  const setBadgeLabelMutation = trpc.admin.setBadgeLabel.useMutation();
+  const setShowBadgeMutation = trpc.admin.setShowBadge.useMutation();
   const setDisplayedFollowersMutation = trpc.admin.setDisplayedFollowers.useMutation();
+  const banUserMutation = trpc.admin.banUser.useMutation();
+  const setRoleMutation = trpc.admin.setRole.useMutation();
+  
   const reviewBadgeMutation = trpc.admin.reviewBadgeApplication.useMutation();
   const reviewReportMutation = trpc.admin.reviewReport.useMutation();
   const reviewReelMutation = trpc.admin.reviewReel.useMutation();
   const reviewAppealMutation = trpc.admin.reviewAppeal.useMutation();
+  const setReelPromotionMutation = trpc.admin.setReelPromotion.useMutation();
+  
   const deletePostMutation = trpc.admin.deletePost.useMutation();
   const applicationsQuery = trpc.admin.getBadgeApplications.useQuery();
   const uploadPolicyQuery = trpc.admin.getMediaPolicy.useQuery();
@@ -82,6 +93,7 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const closeRecoveryMutation = trpc.admin.closeRecovery.useMutation();
   const geminiApplyMutation = trpc.admin.geminiApplySafeActions.useMutation();
   const geminiChatMutation = trpc.admin.geminiChat.useMutation();
+  const setMaintenanceMutation = trpc.admin.setMaintenance.useMutation();
   const utils = trpc.useUtils();
 
   const users = usersQuery.data || [];
@@ -91,6 +103,7 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const reels = reelsQuery.data || [];
   const appeals = appealsQuery.data || [];
   const auditLog = auditLogQuery.data || [];
+  const promotions = reelsPromotionsQuery.data || [];
   const uploadPolicy = uploadPolicyQuery.data || { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
   const emailSettings = emailSettingsQuery.data || { emailDeliveryEnabled: true, signupVerificationEnabled: false, appScriptLoginEnabled: false, appScriptResetEnabled: false };
   const recoverySettings = recoverySettingsQuery.data || { guestRecoveryEnabled: false, whatsappSupportEnabled: false, whatsappSupportNumber: "+8801404841981" };
@@ -102,213 +115,372 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const updateUploadPolicy = (next: { photosEnabled: boolean; profilePhotosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy: any) => { (utils.admin.getMediaPolicy as any).setData(undefined, policy); (utils.media.policy as any).setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error: any) => toast.error(error.message) });
   const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings: any) => { (utils.admin.getEmailSettings as any).setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error: any) => toast.error(error.message) });
   const updateRecoverySettings = (next: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) => setRecoverySettingsMutation.mutate(next, { onSuccess: (settings: any) => { (utils.admin.getRecoverySettings as any).setData(undefined, settings); setWhatsappNumber(settings.whatsappSupportNumber); (utils.recovery.settings as any).invalidate(); toast.success("Recovery support settings updated"); }, onError: (error: any) => toast.error(error.message) });
-  const setMaintenanceMutation = trpc.admin.setMaintenance.useMutation();
   const toggleMaintenance = (enabled: boolean) => setMaintenanceMutation.mutate({ enabled }, { onSuccess: () => { marketplaceSettingsQuery.refetch(); toast.success(`Maintenance mode ${enabled ? "enabled" : "disabled"}`); }, onError: (error: any) => toast.error(error.message) });
 
+  const tabs = [
+    { id: "overview", label: "Overview", icon: ShieldCheck },
+    { id: "governance", label: "Governance", icon: Lock },
+    { id: "users", label: "Users", icon: UserCheck },
+    { id: "content", label: "Content", icon: Video },
+    { id: "analytics", label: "Analytics", icon: Sparkles },
+    { id: "system", label: "System", icon: Archive },
+  ];
+
   return (
-    <div className="min-h-screen bg-background p-4 text-foreground sm:p-8">
-      <div className="mx-auto max-w-5xl space-y-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div><h2 className="font-display text-3xl font-bold tracking-tight">Creator Studio</h2><p className="mt-1 text-sm text-muted-foreground">Platform governance, safety controls, and owner-only management.</p></div>
-          <div className="flex gap-2"><Link href="/" className="rounded-2xl border border-border bg-card px-4 py-2.5 text-xs font-semibold transition hover:border-violet-400">Back to Feed</Link></div>
-        </div>
-
-        <div className="rounded-[28px] border border-violet-300/70 bg-violet-500/5 p-6 shadow-sm">
-          <h3 className="mb-4 flex items-center gap-2 font-semibold text-violet-700 dark:text-violet-300"><Sparkles className="h-4 w-4" /> AI Platform Assistant</h3>
-          <div className="h-[400px] overflow-hidden rounded-2xl border border-violet-200 bg-card shadow-inner dark:border-violet-900">
-            <AIChatBox messages={geminiChatMessages} onSendMessage={async (content) => {
-              const nextMessages = [...geminiChatMessages, { role: "user" as const, content }];
-              setGeminiChatMessages(nextMessages);
-              try {
-                const reply = await geminiChatMutation.mutateAsync({ 
-                  messages: nextMessages.map(m => ({ role: m.role === "assistant" ? "model" as const : "user" as const, content: m.content })),
-                });
-                setGeminiChatMessages([...nextMessages, { role: "assistant", content: reply.content }]);
-                if ((reply as any).proposal) {
-                  toast.info("The assistant has generated a platform improvement proposal.", {
-                    action: { label: "Review", onClick: () => { /* Logic to show proposal modal */ } }
-                  });
-                }
-              } catch (err: any) {
-                toast.error(err.message || "Gemini is unavailable");
-              }
-            }} isLoading={geminiChatMutation.isPending} />
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="flex flex-col lg:flex-row">
+        {/* Sidebar */}
+        <aside className="w-full shrink-0 border-b border-border bg-card lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r">
+          <div className="p-6">
+            <h2 className="font-display text-2xl font-bold tracking-tight text-violet-600">Creator Studio</h2>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Owner Space</p>
           </div>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
-            <h3 className="mb-4 font-semibold">Email Delivery</h3>
-            <div className="space-y-3">
-              <button type="button" onClick={() => updateEmailSettings({ ...emailSettings, emailDeliveryEnabled: !emailSettings.emailDeliveryEnabled })} className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.emailDeliveryEnabled ? "border-violet-300 bg-violet-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Automatic email sending</span><span className="mt-1 block text-[11px] text-muted-foreground">Required for signup verification and password resets.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${emailSettings.emailDeliveryEnabled ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground"}`}>{emailSettings.emailDeliveryEnabled ? "ON" : "OFF"}</span></button>
-              <button type="button" onClick={() => updateEmailSettings({ ...emailSettings, signupVerificationEnabled: !emailSettings.signupVerificationEnabled })} className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.signupVerificationEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Signup verification codes</span><span className="mt-1 block text-[11px] text-muted-foreground">Force users to verify their email before account creation.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${emailSettings.signupVerificationEnabled ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"}`}>{emailSettings.signupVerificationEnabled ? "ON" : "OFF"}</span></button>
-            </div>
-          </div>
-          <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
-            <h3 className="mb-4 font-semibold">Media Upload Policy</h3>
-            <div className="space-y-3">
-              <button type="button" onClick={() => updateUploadPolicy({ ...uploadPolicy, photosEnabled: !uploadPolicy.photosEnabled })} className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left transition ${uploadPolicy.photosEnabled ? "border-violet-300 bg-violet-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Allow post photo uploads</span><span className="mt-1 block text-[11px] text-muted-foreground">Global switch for new photo posts and stories.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${uploadPolicy.photosEnabled ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground"}`}>{uploadPolicy.photosEnabled ? "ON" : "OFF"}</span></button>
-              <button type="button" onClick={() => updateUploadPolicy({ ...uploadPolicy, profilePhotosEnabled: !uploadPolicy.profilePhotosEnabled })} className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left transition ${uploadPolicy.profilePhotosEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Allow profile photo changes</span><span className="mt-1 block text-[11px] text-muted-foreground">Enable users to upload custom avatars in settings.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${uploadPolicy.profilePhotosEnabled ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"}`}>{uploadPolicy.profilePhotosEnabled ? "ON" : "OFF"}</span></button>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold">Account Recovery & Support</h3><p className="mt-1 text-[11px] text-muted-foreground">Manage how users regain access to their accounts.</p></div></div>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <button type="button" onClick={() => updateRecoverySettings({ ...recoverySettings, guestRecoveryEnabled: !recoverySettings.guestRecoveryEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${recoverySettings.guestRecoveryEnabled ? "border-violet-300 bg-violet-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Guest recovery ID</span><span className="mt-1 block text-[11px] text-muted-foreground">Temporary owner-only support thread.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${recoverySettings.guestRecoveryEnabled ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground"}`}>{recoverySettings.guestRecoveryEnabled ? "ON" : "OFF"}</span></button>
-            <button type="button" onClick={() => updateRecoverySettings({ ...recoverySettings, whatsappSupportEnabled: !recoverySettings.whatsappSupportEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${recoverySettings.whatsappSupportEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">WhatsApp support link</span><span className="mt-1 block text-[11px] text-muted-foreground">Show a direct recovery link.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${recoverySettings.whatsappSupportEnabled ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"}`}>{recoverySettings.whatsappSupportEnabled ? "ON" : "OFF"}</span></button>
-          </div>
-          <div className="mt-5 space-y-3">
-            <h4 className="text-sm font-semibold">Owner recovery inbox</h4>
-            {(recoveryInboxQuery.data || []).map((request: any) => (
-              <div key={request.id} className="rounded-2xl border border-border bg-muted/30 p-4">
-                <div className="flex items-center justify-between">
-                  <div><p className="text-sm font-semibold">{request.guestLabel}</p><p className="text-[10px] text-muted-foreground">{request.accountEmail} · {request.status}</p></div>
-                  <button onClick={() => closeRecoveryMutation.mutate({ requestId: request.id }, { onSuccess: () => { (utils.admin.getRecoveryInbox as any).invalidate(); toast.success("Closed"); } })} className="rounded-xl border border-border px-3 py-1.5 text-[10px] font-semibold">Close</button>
-                </div>
-                <div className="mt-3 space-y-2">
-                  {(request.messages || []).map((msg: any) => <div key={msg.id} className={`rounded-xl p-2 text-xs ${msg.senderType === "owner" ? "bg-violet-600 text-white" : "bg-card"}`}>{msg.body}</div>)}
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <input value={recoveryReplies[request.id] ?? ""} onChange={(e) => setRecoveryReplies({ ...recoveryReplies, [request.id]: e.target.value })} placeholder="Reply..." className="h-9 flex-1 rounded-xl border border-border bg-background px-3 text-xs outline-none" />
-                  <button onClick={() => replyRecoveryMutation.mutate({ requestId: request.id, body: recoveryReplies[request.id] || "" }, { onSuccess: () => { setRecoveryReplies({ ...recoveryReplies, [request.id]: "" }); (utils.admin.getRecoveryInbox as any).invalidate(); } })} className="rounded-xl bg-violet-600 px-3 text-xs font-semibold text-white">Send</button>
-                </div>
-              </div>
+          <nav className="space-y-1 px-3 pb-6">
+            {tabs.map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${activeTab === tab.id ? "bg-violet-500/10 text-violet-600 dark:text-violet-400" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+                <tab.icon className="h-4 w-4" />
+                {tab.label}
+              </button>
             ))}
-          </div>
-        </div>
+            <div className="pt-4 mt-4 border-t border-border/60">
+              <Link href="/" className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground">
+                <ArrowRight className="h-4 w-4" />
+                Back to Feed
+              </Link>
+            </div>
+          </nav>
+        </aside>
 
-        <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
-          <h3 className="mb-4 font-semibold text-violet-600">Badge Marketplace Management</h3>
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Badge Pricing</p>
-              {["blue", "black", "gold", "vip", "founder", "legend"].map((type) => {
-                const s = marketplaceSettingsQuery.data?.marketplace.find((m: any) => m.badgeType === type);
-                return (
-                  <div key={type} className="flex items-center justify-between rounded-2xl border border-border/60 bg-muted/20 p-3">
-                    <div className="flex items-center gap-2"><ProfileBadge type={type as any} /><span className="text-xs font-bold uppercase">{type}</span></div>
+        {/* Main Content */}
+        <main className="flex-1 p-4 sm:p-8">
+          <div className="mx-auto max-w-4xl space-y-8">
+            {activeTab === "overview" && (
+              <>
+                <div className="rounded-[28px] border border-violet-300/70 bg-violet-500/5 p-6 shadow-sm">
+                  <h3 className="mb-4 flex items-center gap-2 font-semibold text-violet-700 dark:text-violet-300"><Sparkles className="h-4 w-4" /> AI Platform Assistant</h3>
+                  <div className="h-[400px] overflow-hidden rounded-2xl border border-violet-200 bg-card shadow-inner dark:border-violet-900">
+                    <AIChatBox messages={geminiChatMessages} onSendMessage={async (content) => {
+                      const nextMessages = [...geminiChatMessages, { role: "user" as const, content }];
+                      setGeminiChatMessages(nextMessages);
+                      try {
+                        const reply = await geminiChatMutation.mutateAsync({ 
+                          messages: nextMessages.map(m => ({ role: m.role === "assistant" ? "model" as const : "user" as const, content: m.content })),
+                        });
+                        setGeminiChatMessages([...nextMessages, { role: "assistant", content: reply.content }]);
+                      } catch (err: any) {
+                        toast.error(err.message || "Gemini is unavailable");
+                      }
+                    }} isLoading={geminiChatMutation.isPending} />
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="font-semibold text-violet-600">Platform Status</h3>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => setMarketplaceMutation.mutate({ badgeType: type as any, isPaid: !s?.isPaid, price: s?.price || "0" }, { onSuccess: () => marketplaceSettingsQuery.refetch() })} className={`rounded-lg px-2 py-1 text-[10px] font-bold ${s?.isPaid ? "bg-amber-500/10 text-amber-600" : "bg-emerald-500/10 text-emerald-600"}`}>{s?.isPaid ? "PAID" : "FREE"}</button>
-                      <input value={s?.price || ""} onChange={(e) => setMarketplaceMutation.mutate({ badgeType: type as any, isPaid: s?.isPaid || false, price: e.target.value }, { onSuccess: () => marketplaceSettingsQuery.refetch() })} className="w-16 rounded-lg bg-card px-2 py-1 text-[10px] outline-none" placeholder="Price" />
+                      <span className={`h-2 w-2 rounded-full ${marketplaceSettingsQuery.data?.platform.maintenanceMode ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">{marketplaceSettingsQuery.data?.platform.maintenanceMode ? "Maintenance" : "Live"}</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-            <div className="space-y-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Manual Payment Info</p>
-              <div className="space-y-2">
-                <input value={marketplaceSettingsQuery.data?.payments.bkashNumber || ""} onChange={(e) => { const p = marketplaceSettingsQuery.data?.payments; setPaymentMutation.mutate({ bkashNumber: e.target.value, nagadNumber: p?.nagadNumber || null, paypalEmail: p?.paypalEmail || null, instructions: p?.instructions || null }, { onSuccess: () => marketplaceSettingsQuery.refetch() }); }} placeholder="bKash Number" className="h-10 w-full rounded-xl border border-border bg-muted/30 px-3 text-xs outline-none" />
-                <input value={marketplaceSettingsQuery.data?.payments.nagadNumber || ""} onChange={(e) => { const p = marketplaceSettingsQuery.data?.payments; setPaymentMutation.mutate({ nagadNumber: e.target.value, bkashNumber: p?.bkashNumber || null, paypalEmail: p?.paypalEmail || null, instructions: p?.instructions || null }, { onSuccess: () => marketplaceSettingsQuery.refetch() }); }} placeholder="Nagad Number" className="h-10 w-full rounded-xl border border-border bg-muted/30 px-3 text-xs outline-none" />
-                <input value={marketplaceSettingsQuery.data?.payments.paypalEmail || ""} onChange={(e) => { const p = marketplaceSettingsQuery.data?.payments; setPaymentMutation.mutate({ paypalEmail: e.target.value, bkashNumber: p?.bkashNumber || null, nagadNumber: p?.nagadNumber || null, instructions: p?.instructions || null }, { onSuccess: () => marketplaceSettingsQuery.refetch() }); }} placeholder="PayPal Email" className="h-10 w-full rounded-xl border border-border bg-muted/30 px-3 text-xs outline-none" />
-                <textarea value={marketplaceSettingsQuery.data?.payments.instructions || ""} onChange={(e) => { const p = marketplaceSettingsQuery.data?.payments; setPaymentMutation.mutate({ instructions: e.target.value, bkashNumber: p?.bkashNumber || null, nagadNumber: p?.nagadNumber || null, paypalEmail: p?.paypalEmail || null }, { onSuccess: () => marketplaceSettingsQuery.refetch() }); }} placeholder="Payment Instructions" className="min-h-20 w-full rounded-xl border border-border bg-muted/30 p-3 text-xs outline-none" />
-              </div>
-            </div>
-          </div>
-        </div>
+                  <div className="flex items-center justify-between rounded-2xl bg-muted/50 p-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold uppercase tracking-wider">Maintenance Mode</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">Pause public access to all features except login for admins.</p>
+                    </div>
+                    <button onClick={() => toggleMaintenance(!marketplaceSettingsQuery.data?.platform.maintenanceMode)} disabled={setMaintenanceMutation.isPending} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${marketplaceSettingsQuery.data?.platform.maintenanceMode ? "bg-violet-600" : "bg-zinc-300"}`}>
+                      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${marketplaceSettingsQuery.data?.platform.maintenanceMode ? "translate-x-5" : "translate-x-0"}`} />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
-        <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
-          <h3 className="mb-4 font-semibold text-amber-600">Pending Badge Applications</h3>
-          <div className="space-y-3">
-            {applications.filter((a: any) => a.status === "pending").map((app: any) => (
-              <div key={app.id} className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex gap-3">
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-muted"><SafeImage src={app.user.avatarUrl} fallbackName={app.user.name || app.user.username} className="h-full w-full object-cover" /></div>
-                    <div>
-                      <p className="text-sm font-semibold">{app.user.name || app.user.username}</p>
-                      <div className="mt-1 flex items-center gap-2"><span className="text-[10px] text-muted-foreground">Requesting:</span><ProfileBadge type={app.requestedBadge} /><span className="text-[10px] font-bold uppercase">{app.requestedBadge}</span></div>
-                      {app.reason && <p className="mt-2 rounded-lg bg-card p-2 text-[10px] italic">"{app.reason}"</p>}
+            {activeTab === "governance" && (
+              <div className="space-y-6">
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                    <h3 className="mb-4 font-semibold">Email Delivery</h3>
+                    <div className="space-y-3">
+                      <button type="button" onClick={() => updateEmailSettings({ ...emailSettings, emailDeliveryEnabled: !emailSettings.emailDeliveryEnabled })} className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.emailDeliveryEnabled ? "border-violet-300 bg-violet-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Automatic email sending</span><span className="mt-1 block text-[11px] text-muted-foreground">Required for signup verification and password resets.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${emailSettings.emailDeliveryEnabled ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground"}`}>{emailSettings.emailDeliveryEnabled ? "ON" : "OFF"}</span></button>
+                      <button type="button" onClick={() => updateEmailSettings({ ...emailSettings, signupVerificationEnabled: !emailSettings.signupVerificationEnabled })} className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left transition ${emailSettings.signupVerificationEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Signup verification codes</span><span className="mt-1 block text-[11px] text-muted-foreground">Force users to verify their email before account creation.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${emailSettings.signupVerificationEnabled ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"}`}>{emailSettings.signupVerificationEnabled ? "ON" : "OFF"}</span></button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => reviewBadgeMutation.mutate({ applicationId: app.id, status: "approved" }, { onSuccess: () => { applicationsQuery.refetch(); toast.success("Approved"); } })} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[10px] font-semibold text-white">Approve</button>
-                    <button onClick={() => reviewBadgeMutation.mutate({ applicationId: app.id, status: "rejected" }, { onSuccess: () => { applicationsQuery.refetch(); toast.success("Rejected"); } })} className="rounded-xl border border-border bg-card px-3 py-1.5 text-[10px] font-semibold">Reject</button>
+                  <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                    <h3 className="mb-4 font-semibold">Media Upload Policy</h3>
+                    <div className="space-y-3">
+                      <button type="button" onClick={() => updateUploadPolicy({ ...uploadPolicy, photosEnabled: !uploadPolicy.photosEnabled })} className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left transition ${uploadPolicy.photosEnabled ? "border-violet-300 bg-violet-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Allow post photo uploads</span><span className="mt-1 block text-[11px] text-muted-foreground">Global switch for new photo posts and stories.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${uploadPolicy.photosEnabled ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground"}`}>{uploadPolicy.photosEnabled ? "ON" : "OFF"}</span></button>
+                      <button type="button" onClick={() => updateUploadPolicy({ ...uploadPolicy, profilePhotosEnabled: !uploadPolicy.profilePhotosEnabled })} className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left transition ${uploadPolicy.profilePhotosEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Allow profile photo changes</span><span className="mt-1 block text-[11px] text-muted-foreground">Enable users to upload custom avatars in settings.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${uploadPolicy.profilePhotosEnabled ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"}`}>{uploadPolicy.profilePhotosEnabled ? "ON" : "OFF"}</span></button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold text-emerald-600">Event Themes</h3>
+                  <div className="flex flex-wrap gap-3">
+                    {["none", "ramadan", "eid", "new_year", "valentine", "halloween"].map((theme) => {
+                      const active = marketplaceSettingsQuery.data?.platform.eventTheme === theme || (!marketplaceSettingsQuery.data?.platform.eventTheme && theme === "none");
+                      return (
+                        <button key={theme} onClick={() => setPlatformMutation.mutate({ eventTheme: theme === "none" ? null : theme }, { onSuccess: () => marketplaceSettingsQuery.refetch() })} className={`rounded-2xl border px-4 py-3 text-xs font-bold uppercase tracking-wider transition ${active ? "border-emerald-500 bg-emerald-500/10 text-emerald-600" : "border-border bg-muted/40"}`}>{theme}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold text-violet-600">Badge Marketplace Pricing</h3>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <div className="space-y-4">
+                      {["blue", "black", "gold", "vip", "founder", "legend"].map((type) => {
+                        const s = marketplaceSettingsQuery.data?.marketplace.find((m: any) => m.badgeType === type);
+                        return (
+                          <div key={type} className="flex items-center justify-between rounded-2xl border border-border/60 bg-muted/20 p-3">
+                            <div className="flex items-center gap-2"><ProfileBadge type={type as any} /><span className="text-xs font-bold uppercase">{type}</span></div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => setMarketplaceMutation.mutate({ badgeType: type as any, isPaid: !s?.isPaid, price: s?.price || "0" }, { onSuccess: () => marketplaceSettingsQuery.refetch() })} className={`rounded-lg px-2 py-1 text-[10px] font-bold ${s?.isPaid ? "bg-amber-500/10 text-amber-600" : "bg-emerald-500/10 text-emerald-600"}`}>{s?.isPaid ? "PAID" : "FREE"}</button>
+                              <input value={s?.price || ""} onChange={(e) => setMarketplaceMutation.mutate({ badgeType: type as any, isPaid: s?.isPaid || false, price: e.target.value }, { onSuccess: () => marketplaceSettingsQuery.refetch() })} className="w-16 rounded-lg bg-card px-2 py-1 text-[10px] outline-none" placeholder="Price" />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="space-y-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Payment Info</p>
+                      <div className="space-y-2">
+                        <input value={marketplaceSettingsQuery.data?.payments.bkashNumber || ""} onChange={(e) => { const p = marketplaceSettingsQuery.data?.payments; setPaymentMutation.mutate({ bkashNumber: e.target.value, nagadNumber: p?.nagadNumber || null, paypalEmail: p?.paypalEmail || null, instructions: p?.instructions || null }, { onSuccess: () => marketplaceSettingsQuery.refetch() }); }} placeholder="bKash Number" className="h-10 w-full rounded-xl border border-border bg-muted/30 px-3 text-xs outline-none" />
+                        <input value={marketplaceSettingsQuery.data?.payments.nagadNumber || ""} onChange={(e) => { const p = marketplaceSettingsQuery.data?.payments; setPaymentMutation.mutate({ nagadNumber: e.target.value, bkashNumber: p?.bkashNumber || null, paypalEmail: p?.paypalEmail || null, instructions: p?.instructions || null }, { onSuccess: () => marketplaceSettingsQuery.refetch() }); }} placeholder="Nagad Number" className="h-10 w-full rounded-xl border border-border bg-muted/30 px-3 text-xs outline-none" />
+                        <input value={marketplaceSettingsQuery.data?.payments.paypalEmail || ""} onChange={(e) => { const p = marketplaceSettingsQuery.data?.payments; setPaymentMutation.mutate({ paypalEmail: e.target.value, bkashNumber: p?.bkashNumber || null, nagadNumber: p?.nagadNumber || null, instructions: p?.instructions || null }, { onSuccess: () => marketplaceSettingsQuery.refetch() }); }} placeholder="PayPal Email" className="h-10 w-full rounded-xl border border-border bg-muted/30 px-3 text-xs outline-none" />
+                        <textarea value={marketplaceSettingsQuery.data?.payments.instructions || ""} onChange={(e) => { const p = marketplaceSettingsQuery.data?.payments; setPaymentMutation.mutate({ instructions: e.target.value, bkashNumber: p?.bkashNumber || null, nagadNumber: p?.nagadNumber || null, paypalEmail: p?.paypalEmail || null }, { onSuccess: () => marketplaceSettingsQuery.refetch() }); }} placeholder="Payment Instructions" className="min-h-20 w-full rounded-xl border border-border bg-muted/30 p-3 text-xs outline-none" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold">Recovery Settings</h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <button type="button" onClick={() => updateRecoverySettings({ ...recoverySettings, guestRecoveryEnabled: !recoverySettings.guestRecoveryEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${recoverySettings.guestRecoveryEnabled ? "border-violet-300 bg-violet-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">Guest recovery ID</span><span className="mt-1 block text-[11px] text-muted-foreground">Temporary owner-only support thread.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${recoverySettings.guestRecoveryEnabled ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground"}`}>{recoverySettings.guestRecoveryEnabled ? "ON" : "OFF"}</span></button>
+                    <button type="button" onClick={() => updateRecoverySettings({ ...recoverySettings, whatsappSupportEnabled: !recoverySettings.whatsappSupportEnabled })} className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${recoverySettings.whatsappSupportEnabled ? "border-emerald-300 bg-emerald-500/10" : "border-border bg-muted/40"}`}><span><span className="block text-sm font-semibold">WhatsApp support link</span><span className="mt-1 block text-[11px] text-muted-foreground">Show a direct recovery link.</span></span><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${recoverySettings.whatsappSupportEnabled ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"}`}>{recoverySettings.whatsappSupportEnabled ? "ON" : "OFF"}</span></button>
+                  </div>
+                  <div className="mt-4">
+                    <input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} onBlur={() => updateRecoverySettings({ ...recoverySettings, whatsappSupportNumber: whatsappNumber })} placeholder="WhatsApp Support Number" className="h-10 w-full rounded-xl border border-border bg-muted/30 px-3 text-xs outline-none" />
                   </div>
                 </div>
               </div>
-            ))}
-            {!applications.filter((a: any) => a.status === "pending").length && <p className="py-6 text-center text-xs text-muted-foreground">No pending badge applications.</p>}
-          </div>
-        </div>
+            )}
 
-        <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
-          <h3 className="mb-4 font-semibold">User Management</h3>
-          <div className="space-y-4">
-            {(users as any).map((u: any) => (
-              <div key={u.id} className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-muted">
-                    <SafeImage src={u.avatarUrl} fallbackName={u.name || u.username} className="h-full w-full object-cover" />
+            {activeTab === "users" && (
+              <div className="space-y-6">
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold">Badge Applications</h3>
+                  <div className="space-y-3">
+                    {applications.filter((a: any) => a.status === "pending").map((app: any) => (
+                      <div key={app.id} className="rounded-2xl border border-border/60 bg-muted/30 p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex gap-3">
+                            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-muted"><SafeImage src={app.user.avatarUrl} fallbackName={app.user.name || app.user.username} className="h-full w-full object-cover" /></div>
+                            <div>
+                              <p className="text-sm font-semibold">{app.user.name || app.user.username}</p>
+                              <div className="mt-1 flex items-center gap-2"><span className="text-[10px] text-muted-foreground">Requesting:</span><ProfileBadge type={app.requestedBadge} /><span className="text-[10px] font-bold uppercase">{app.requestedBadge}</span></div>
+                              {app.reason && <p className="mt-2 rounded-lg bg-card p-2 text-[10px] italic">"{app.reason}"</p>}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => reviewBadgeMutation.mutate({ applicationId: app.id, status: "approved" }, { onSuccess: () => { applicationsQuery.refetch(); toast.success("Approved"); } })} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[10px] font-semibold text-white">Approve</button>
+                            <button onClick={() => reviewBadgeMutation.mutate({ applicationId: app.id, status: "rejected" }, { onSuccess: () => { applicationsQuery.refetch(); toast.success("Rejected"); } })} className="rounded-xl border border-border bg-card px-3 py-1.5 text-[10px] font-semibold">Reject</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {!applications.filter((a: any) => a.status === "pending").length && <p className="py-6 text-center text-xs text-muted-foreground">No pending applications.</p>}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{u.name || u.username}</p>
-                    <p className="truncate text-[10px] text-muted-foreground">{u.email} · {u.role}</p>
-                    <div className="mt-1 flex items-center gap-1">
-                      {u.badgeType && <ProfileBadge type={u.badgeType as any} />}
-                      {u.secondaryBadgeType && <ProfileBadge type={u.secondaryBadgeType as any} />}
+                </div>
+
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold">User Directory</h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {(users as any).map((u: any) => (
+                      <div key={u.id} className="rounded-2xl border border-border/60 bg-muted/30 p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-muted"><SafeImage src={u.avatarUrl} fallbackName={u.name || u.username} className="h-full w-full object-cover" /></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold">{u.name || u.username}</p>
+                            <p className="truncate text-[10px] text-muted-foreground">{u.email} · {u.role}</p>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              <button onClick={() => setBadgeMutation.mutate({ userId: u.id, badgeType: u.badgeType === "blue" ? "none" : "blue" }, { onSuccess: () => usersQuery.refetch() })} className={`rounded-lg px-2 py-1 text-[9px] font-bold uppercase transition ${u.badgeType === "blue" ? "bg-blue-500 text-white" : "bg-muted text-muted-foreground"}`}>Blue</button>
+                              <button onClick={() => setCreatorMutation.mutate({ userId: u.id, value: !u.isCreator }, { onSuccess: () => usersQuery.refetch() })} className={`rounded-lg px-2 py-1 text-[9px] font-bold uppercase transition ${u.isCreator ? "bg-violet-500 text-white" : "bg-muted text-muted-foreground"}`}>Creator</button>
+                              <button onClick={() => banUserMutation.mutate({ userId: u.id, value: !u.isBanned }, { onSuccess: () => usersQuery.refetch() })} className={`rounded-lg px-2 py-1 text-[9px] font-bold uppercase transition ${u.isBanned ? "bg-rose-500 text-white" : "bg-muted text-muted-foreground"}`}>{u.isBanned ? "Unban" : "Ban"}</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold">Recovery Inbox</h3>
+                  <div className="space-y-4">
+                    {(recoveryInboxQuery.data || []).map((request: any) => (
+                      <div key={request.id} className="rounded-2xl border border-border bg-muted/30 p-4">
+                        <div className="flex items-center justify-between">
+                          <div><p className="text-sm font-semibold">{request.guestLabel}</p><p className="text-[10px] text-muted-foreground">{request.accountEmail} · {request.status}</p></div>
+                          <button onClick={() => closeRecoveryMutation.mutate({ requestId: request.id }, { onSuccess: () => { recoveryInboxQuery.refetch(); toast.success("Closed"); } })} className="rounded-xl border border-border bg-card px-3 py-1.5 text-[10px] font-semibold">Close</button>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {(request.messages || []).map((msg: any) => <div key={msg.id} className={`rounded-xl p-2 text-xs ${msg.senderType === "owner" ? "bg-violet-600 text-white" : "bg-card"}`}>{msg.body}</div>)}
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                          <input value={recoveryReplies[request.id] ?? ""} onChange={(e) => setRecoveryReplies({ ...recoveryReplies, [request.id]: e.target.value })} placeholder="Reply..." className="h-9 flex-1 rounded-xl border border-border bg-background px-3 text-xs outline-none" />
+                          <button onClick={() => replyRecoveryMutation.mutate({ requestId: request.id, body: recoveryReplies[request.id] || "" }, { onSuccess: () => { setRecoveryReplies({ ...recoveryReplies, [request.id]: "" }); recoveryInboxQuery.refetch(); } })} className="rounded-xl bg-violet-600 px-3 text-xs font-semibold text-white">Send</button>
+                        </div>
+                      </div>
+                    ))}
+                    {!recoveryInboxQuery.data?.length && <p className="py-6 text-center text-xs text-muted-foreground">No active recovery requests.</p>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "content" && (
+              <div className="space-y-6">
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold">Reels Review</h3>
+                  <div className="space-y-3">
+                    {reels.filter((r: any) => r.reel.status === "pending").map((item: any) => (
+                      <div key={item.reel.id} className="rounded-2xl border border-border/60 bg-muted/30 p-4">
+                        <div className="flex gap-4">
+                          <div className="aspect-[9/16] w-24 shrink-0 overflow-hidden rounded-xl bg-black">
+                            <video src={item.reel.mediaUrl} className="h-full w-full object-cover" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold">{item.user.name || item.user.username}</p>
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.reel.caption || "No caption"}</p>
+                            <div className="mt-3 flex gap-2">
+                              <button onClick={() => reviewReelMutation.mutate({ reelId: item.reel.id, status: "approved" }, { onSuccess: () => reelsQuery.refetch() })} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[10px] font-semibold text-white">Approve</button>
+                              <button onClick={() => reviewReelMutation.mutate({ reelId: item.reel.id, status: "rejected" }, { onSuccess: () => reelsQuery.refetch() })} className="rounded-xl border border-border bg-card px-3 py-1.5 text-[10px] font-semibold">Reject</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {!reels.filter((r: any) => r.reel.status === "pending").length && <p className="py-6 text-center text-xs text-muted-foreground">No pending reels.</p>}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold">Content Appeals</h3>
+                  <div className="space-y-3">
+                    {appeals.filter((a: any) => a.status === "pending").map((app: any) => (
+                      <div key={app.id} className="rounded-2xl border border-border/60 bg-muted/30 p-4">
+                        <p className="text-xs font-semibold">{app.targetType} #{app.targetId}</p>
+                        <p className="mt-1 text-xs italic">"{app.reason}"</p>
+                        <div className="mt-3 flex gap-2">
+                          <button onClick={() => reviewAppealMutation.mutate({ appealId: app.id, status: "approved" }, { onSuccess: () => appealsQuery.refetch() })} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[10px] font-semibold text-white">Approve</button>
+                          <button onClick={() => reviewAppealMutation.mutate({ appealId: app.id, status: "rejected" }, { onSuccess: () => appealsQuery.refetch() })} className="rounded-xl border border-border bg-card px-3 py-1.5 text-[10px] font-semibold">Reject</button>
+                        </div>
+                      </div>
+                    ))}
+                    {!appeals.filter((a: any) => a.status === "pending").length && <p className="py-6 text-center text-xs text-muted-foreground">No pending appeals.</p>}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold">Safety Queue</h3>
+                  <div className="space-y-3">
+                    {reports.map((item: any) => (
+                      <div key={item.report.id} className="rounded-2xl border border-border/70 bg-muted/30 p-4">
+                        <div className="flex items-start justify-between">
+                          <div><p className="text-xs font-semibold">{item.report.targetType} #{item.report.targetId}</p><p className="text-[10px] text-muted-foreground">{item.report.reason} · {item.report.status}</p></div>
+                          <div className="flex gap-2">
+                            <button onClick={() => reviewReportMutation.mutate({ reportId: item.report.id, status: "reviewed" }, { onSuccess: () => reportsQuery.refetch() })} className="rounded-xl bg-rose-600 px-3 py-1.5 text-[10px] font-semibold text-white">Keep hidden</button>
+                            <button onClick={() => reviewReportMutation.mutate({ reportId: item.report.id, status: "dismissed" }, { onSuccess: () => reportsQuery.refetch() })} className="rounded-xl border border-border bg-card px-3 py-1.5 text-[10px] font-semibold">Restore</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {!reports.length && <p className="py-6 text-center text-xs text-muted-foreground">Safety queue is empty.</p>}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold">Recent Posts</h3>
+                  <div className="space-y-3">
+                    {posts.slice(0, 10).map((post: any) => (
+                      <div key={post.id} className="flex items-center justify-between rounded-2xl border border-border/60 bg-muted/30 p-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-semibold">{post.caption || "No caption"}</p>
+                          <p className="text-[9px] text-muted-foreground">{new Date(post.createdAt).toLocaleString()}</p>
+                        </div>
+                        <button onClick={() => deletePostMutation.mutate({ postId: post.id }, { onSuccess: () => postsQuery.refetch() })} className="rounded-xl p-2 text-rose-500 transition hover:bg-rose-500/10"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "analytics" && (
+              <div className="space-y-6">
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold text-violet-600">Promotion Studio</h3>
+                  <p className="mb-4 text-xs text-muted-foreground">Manage promoted reels and their priority in the feed.</p>
+                  <div className="space-y-4">
+                    {reels.filter((r: any) => r.reel.status === "approved").map((item: any) => {
+                      const promo = promotions.find((p: any) => p.reel.id === item.reel.id);
+                      return (
+                        <div key={item.reel.id} className="flex items-center justify-between rounded-2xl border border-border/60 bg-muted/20 p-4">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-black"><video src={item.reel.mediaUrl} className="h-full w-full object-cover" /></div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">{item.user.name || item.user.username}</p>
+                              <p className="text-[10px] text-muted-foreground">Priority: {promo?.promotion.priority || 0}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => setReelPromotionMutation.mutate({ reelId: item.reel.id, isPromoted: !promo, priority: 1 }, { onSuccess: () => reelsPromotionsQuery.refetch() })} className={`rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase transition ${promo ? "bg-violet-600 text-white" : "bg-muted text-muted-foreground"}`}>{promo ? "Promoted" : "Promote"}</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 font-semibold">Reels Analytics</h3>
+                  <div className="space-y-4">
+                    {(reelsAnalyticsQuery.data || []).map((item: any) => (
+                      <div key={item.reel.id} className="grid grid-cols-4 gap-4 rounded-2xl border border-border/60 bg-muted/30 p-4 text-center">
+                        <div className="text-left"><p className="truncate text-[10px] font-bold uppercase text-muted-foreground">Reel</p><p className="truncate text-xs font-semibold">#{item.reel.id}</p></div>
+                        <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Views</p><p className="text-xs font-semibold">{item.views}</p></div>
+                        <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Likes</p><p className="text-xs font-semibold">{item.likes}</p></div>
+                        <div><p className="text-[10px] font-bold uppercase text-muted-foreground">Comments</p><p className="text-xs font-semibold">{item.comments}</p></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "system" && (
+              <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+                <h3 className="mb-4 font-semibold">Moderation Audit Log</h3>
+                <div className="space-y-3">
+                  {auditLog.map((log: any) => (
+                    <div key={log.log.id} className="rounded-2xl border border-border/60 bg-muted/30 p-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-violet-600">{log.log.action}</p>
+                        <p className="text-[9px] text-muted-foreground">{new Date(log.log.createdAt).toLocaleString()}</p>
+                      </div>
+                      <p className="mt-1 text-[10px]">Actor: {log.actor?.name || "System"} · Target: {log.log.targetType} #{log.log.targetId}</p>
+                      {log.log.details && <p className="mt-1 text-[10px] italic text-muted-foreground">{log.log.details}</p>}
                     </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={() => setBadgeMutation.mutate({ userId: u.id, badgeType: "blue" }, { onSuccess: () => { (utils.admin.users.list as any).invalidate(); toast.success("Badge updated"); } })} className="rounded-xl bg-blue-500 px-3 py-1.5 text-[10px] font-semibold text-white">Blue</button>
-                    <button onClick={() => setBadgeMutation.mutate({ userId: u.id, badgeType: "none" }, { onSuccess: () => { (utils.admin.users.list as any).invalidate(); toast.success("Badge removed"); } })} className="rounded-xl border border-border bg-card px-3 py-1.5 text-[10px] font-semibold">Clear</button>
-                  </div>
+                  ))}
+                  {!auditLog.length && <p className="py-6 text-center text-xs text-muted-foreground">Audit log is empty.</p>}
                 </div>
               </div>
-            ))}
+            )}
           </div>
-        </div>
-
-        <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="font-semibold text-violet-600">Platform Status</h3>
-            <div className="flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${marketplaceSettingsQuery.data?.platform.maintenanceMode ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">{marketplaceSettingsQuery.data?.platform.maintenanceMode ? "Maintenance" : "Live"}</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between rounded-2xl bg-muted/50 p-4">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold uppercase tracking-wider">Maintenance Mode</p>
-              <p className="mt-1 text-[10px] text-muted-foreground">Pause public access to all features except login for admins.</p>
-            </div>
-            <button onClick={() => toggleMaintenance(!marketplaceSettingsQuery.data?.platform.maintenanceMode)} disabled={setMaintenanceMutation.isPending} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${marketplaceSettingsQuery.data?.platform.maintenanceMode ? "bg-violet-600" : "bg-zinc-300"}`}>
-              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${marketplaceSettingsQuery.data?.platform.maintenanceMode ? "translate-x-5" : "translate-x-0"}`} />
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
-          <h3 className="mb-4 font-semibold text-emerald-600">Event Themes</h3>
-          <p className="mb-4 text-xs text-muted-foreground">Set a global theme for special events. This affects all users' default experience.</p>
-          <div className="flex flex-wrap gap-3">
-            {["none", "ramadan", "eid", "new_year", "valentine", "halloween"].map((theme) => {
-              const active = marketplaceSettingsQuery.data?.platform.eventTheme === theme || (!marketplaceSettingsQuery.data?.platform.eventTheme && theme === "none");
-              return (
-                <button key={theme} onClick={() => setPlatformMutation.mutate({ eventTheme: theme === "none" ? null : theme }, { onSuccess: () => marketplaceSettingsQuery.refetch() })} className={`rounded-2xl border px-4 py-3 text-xs font-bold uppercase tracking-wider transition ${active ? "border-emerald-500 bg-emerald-500/10 text-emerald-600" : "border-border bg-muted/40"}`}>{theme}</button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
-          <h3 className="mb-4 font-semibold">Safety queue</h3>
-          <div className="space-y-3">
-            {(reports as any).map((item: any) => (
-              <div key={item.report.id} className="rounded-2xl border border-border/70 bg-muted/30 p-4">
-                <div className="flex items-start justify-between">
-                  <div><p className="text-xs font-semibold">{item.report.targetType} #{item.report.targetId}</p><p className="text-[10px] text-muted-foreground">{item.report.reason} · {item.report.status}</p></div>
-                  <div className="flex gap-2">
-                    <button onClick={() => reviewReportMutation.mutate({ reportId: item.report.id, status: "reviewed" }, { onSuccess: () => { (utils.admin.reports.list as any).invalidate(); toast.success("Reviewed"); } })} className="rounded-xl bg-rose-600 px-3 py-1.5 text-[10px] font-semibold text-white">Keep hidden</button>
-                    <button onClick={() => reviewReportMutation.mutate({ reportId: item.report.id, status: "dismissed" }, { onSuccess: () => { (utils.admin.reports.list as any).invalidate(); toast.success("Dismissed"); } })} className="rounded-xl border border-border bg-card px-3 py-1.5 text-[10px] font-semibold">Restore</button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        </main>
       </div>
       {showBugReport && <BugReportModal onClose={() => setShowBugReport(false)} />}
     </div>

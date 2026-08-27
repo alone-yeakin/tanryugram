@@ -163,12 +163,34 @@ export const appRouter = router({
     }),
   }),
   profile: router({
-	    byId: publicProcedure.input(z.object({ username: z.string().optional(), userId: z.number().optional() })).query(async ({ input }) => {
-	      const database = await db.getDb();
-	      if (!database) return null;
-	      const user = input.userId ? await db.getUserById(input.userId) : (await database.select().from(users).where(eq(users.username, input.username!)).limit(1))[0];
-	      return { user: sanitizeAuthUser(user), posts: [], stats: { followers: 0, following: 0, posts: 0 }, privacy: { isPrivate: false } };
-	    }),
+    byId: publicProcedure.input(z.object({ username: z.string().optional(), userId: z.number().optional() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return null;
+      const user = input.userId ? await db.getUserById(input.userId) : (await database.select().from(users).where(eq(users.username, input.username!)).limit(1))[0];
+      if (!user) return null;
+
+      const [followersCount, followingCount, postsCount, settings] = await Promise.all([
+        database.select({ count: count() }).from(follows).where(eq(follows.followingId, user.id)),
+        database.select({ count: count() }).from(follows).where(eq(follows.followerId, user.id)),
+        database.select({ count: count() }).from(posts).where(eq(posts.userId, user.id)),
+        database.select().from(userSettings).where(eq(userSettings.userId, user.id)).limit(1),
+      ]);
+
+      return {
+        user: sanitizeAuthUser(user),
+        posts: [], // Posts are fetched separately or can be added here
+        stats: {
+          followers: user.displayedFollowersCount ?? followersCount[0].count,
+          following: followingCount[0].count,
+          posts: postsCount[0].count,
+        },
+        privacy: {
+          isPrivate: settings[0]?.isPrivate ?? false,
+          showFollowersList: settings[0]?.showFollowersList ?? true,
+          showFollowingList: settings[0]?.showFollowingList ?? true,
+        }
+      };
+    }),
     update: protectedProcedure.input(z.object({ 
       themeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
       customTextColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
