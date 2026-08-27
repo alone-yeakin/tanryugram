@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { COOKIE_NAME } from "@shared/const";
 import { toast } from "sonner";
-import { Sparkles, ArrowRight, ShieldCheck, Bug, WifiOff, Users, Compass, CheckCircle2, Lock, Mail, User, KeyRound } from "lucide-react";
+import { Sparkles, ArrowRight, ShieldCheck, Bug, WifiOff, Users, Compass, CheckCircle2, Lock, Mail, User, KeyRound, Loader2 } from "lucide-react";
 
 export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
@@ -271,11 +271,12 @@ export function EmailAuthForm({ onLoginSuccess }: { onLoginSuccess: () => void }
         <button
           type="submit"
           disabled={loginMutation.isPending || signupMutation.isPending || requestResetMutation.isPending || confirmResetMutation.isPending}
-          className="w-full rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-violet-700 disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-foreground py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:opacity-50"
         >
-          {mode === "login" && "Sign In"}
-          {mode === "signup" && (requiresVerification ? "Verify & Complete Signup" : "Create Account")}
-          {mode === "forgot" && (resetRequested ? "Verify Code & Update Password" : "Send Reset Code")}
+          {(loginMutation.isPending || signupMutation.isPending || requestResetMutation.isPending || confirmResetMutation.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
+          {mode === "login" && (loginMutation.isPending ? "Signing in..." : "Sign In")}
+          {mode === "signup" && (requiresVerification ? (signupMutation.isPending ? "Verifying..." : "Verify Code") : (signupMutation.isPending ? "Creating..." : "Create Account"))}
+          {mode === "forgot" && (resetRequested ? (confirmResetMutation.isPending ? "Resetting..." : "Reset Password") : (requestResetMutation.isPending ? "Sending..." : "Send Reset Code"))}
         </button>
       </form>
 

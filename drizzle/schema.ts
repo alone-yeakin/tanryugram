@@ -55,6 +55,7 @@ export const platformPaymentSettings = mysqlTable("platformPaymentSettings", {
 export const platformSettings = mysqlTable("platformSettings", {
   id: int("id").autoincrement().primaryKey(),
   eventTheme: varchar("eventTheme", { length: 32 }),
+  maintenanceMode: boolean("maintenanceMode").default(false).notNull(),
   updatedBy: int("updatedBy"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

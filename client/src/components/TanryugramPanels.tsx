@@ -102,6 +102,8 @@ export function AdminView({ onTip }: { onTip: () => void }) {
   const updateUploadPolicy = (next: { photosEnabled: boolean; profilePhotosEnabled: boolean; videosEnabled: boolean }) => setUploadPolicyMutation.mutate(next, { onSuccess: (policy: any) => { (utils.admin.getMediaPolicy as any).setData(undefined, policy); (utils.media.policy as any).setData(undefined, policy); toast.success("Upload policy updated"); }, onError: (error: any) => toast.error(error.message) });
   const updateEmailSettings = (next: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean }) => setEmailSettingsMutation.mutate(next, { onSuccess: (settings: any) => { (utils.admin.getEmailSettings as any).setData(undefined, settings); toast.success("Email settings updated"); }, onError: (error: any) => toast.error(error.message) });
   const updateRecoverySettings = (next: { guestRecoveryEnabled: boolean; whatsappSupportEnabled: boolean; whatsappSupportNumber: string }) => setRecoverySettingsMutation.mutate(next, { onSuccess: (settings: any) => { (utils.admin.getRecoverySettings as any).setData(undefined, settings); setWhatsappNumber(settings.whatsappSupportNumber); (utils.recovery.settings as any).invalidate(); toast.success("Recovery support settings updated"); }, onError: (error: any) => toast.error(error.message) });
+  const setMaintenanceMutation = trpc.admin.setMaintenance.useMutation();
+  const toggleMaintenance = (enabled: boolean) => setMaintenanceMutation.mutate({ enabled }, { onSuccess: () => { marketplaceSettingsQuery.refetch(); toast.success(`Maintenance mode ${enabled ? "enabled" : "disabled"}`); }, onError: (error: any) => toast.error(error.message) });
 
   return (
     <div className="min-h-screen bg-background p-4 text-foreground sm:p-8">
@@ -256,6 +258,25 @@ export function AdminView({ onTip }: { onTip: () => void }) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-border/70 bg-card p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-semibold text-violet-600">Platform Status</h3>
+            <div className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${marketplaceSettingsQuery.data?.platform.maintenanceMode ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
+              <span className="text-[10px] font-bold uppercase tracking-wider">{marketplaceSettingsQuery.data?.platform.maintenanceMode ? "Maintenance" : "Live"}</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between rounded-2xl bg-muted/50 p-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold uppercase tracking-wider">Maintenance Mode</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">Pause public access to all features except login for admins.</p>
+            </div>
+            <button onClick={() => toggleMaintenance(!marketplaceSettingsQuery.data?.platform.maintenanceMode)} disabled={setMaintenanceMutation.isPending} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${marketplaceSettingsQuery.data?.platform.maintenanceMode ? "bg-violet-600" : "bg-zinc-300"}`}>
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${marketplaceSettingsQuery.data?.platform.maintenanceMode ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
           </div>
         </div>
 

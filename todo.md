@@ -670,3 +670,15 @@
 - [x] Run release-path tests, TypeScript, production build, and production RPC validation — all passed
 - [x] Save and publish the final release checkpoint
 - [x] Deliver release report and request mobile/browser cache-cleared retest
+
+## Release Hardening & Feature Polish
+
+- [x] Audit maintenance mode, Messenger filtering, story-ownership, and people-visibility implementations
+- [x] Add Maintenance Mode toggle in Creator Studio and implement public-access gating
+- [x] Add unread message filter and Messenger-inbox search improvements
+- [x] Add inbox reload option and harden Messenger status handling
+- [x] Remove demo/bot story data and implement real-user story deletion and real profile
+- [x] Audit and repair people/follower/call-identity displays to ensure real data visibility
+- [x] Improve password-reset flow with loading animations and clear status feedback
+- [x] Run focused regression tests, TypeScript, production build, and smoke-check critical routes
+- [x] Save and publish the hardened release checkpoint

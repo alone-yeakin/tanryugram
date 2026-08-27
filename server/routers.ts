@@ -10,14 +10,14 @@ import { sendVerificationEmail } from "./gmailMailer";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { storagePresignPut, storagePut } from "./storage";
 import * as db from "./db";
-import { eq, and, count, desc, sql, or, ne, inArray, lt, like, asc, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, count, desc, sql, or, ne, inArray, lt, like, asc, isNull, isNotNull, gt, aliasedTable } from "drizzle-orm";
 import { sdk } from "./_core/sdk";
 import { ENV } from "./_core/env";
 import { sendIncomingCallPush } from "./firebaseAdmin";
 import { checkEmailCodeRateLimit } from "./emailRateLimit";
 import { buildUserMigrationArchive, importUserMigrationArchive, inspectUserMigrationArchive, USER_MIGRATION_MAX_BYTES } from "./userMigration";
 import { applySafeGeminiActions, generateGeminiChatReply, generateGeminiFeatureProposal } from "./geminiAssistant";
-import { users, messages, emailVerificationCodes, userSettings, badgeMarketplaceSettings, badgeApplications, platformPaymentSettings, recoverySupportRequests, recoverySupportMessages, contentAppeals, follows, reelSubmissions, reelBookmarks, contentReports, reelComments, reelLikes, reelViews, messageReactions, calls, notifications, comments, pushTokens, likes, saves, dailyReelAnalytics, postMedia, reelPromotions, userMediaPermissions, groupMessages, groupEvents, groupPolls, groupPollOptions, groupJoinRequests, groupMembers, groups, groupInviteRequests, typingStatus, groupEventRsvps, groupPollVotes, conversationSettings, posts } from "../drizzle/schema";
+import { users, messages, emailVerificationCodes, userSettings, badgeMarketplaceSettings, badgeApplications, platformPaymentSettings, recoverySupportRequests, recoverySupportMessages, contentAppeals, follows, reelSubmissions, reelBookmarks, contentReports, reelComments, reelLikes, reelViews, messageReactions, calls, notifications, comments, pushTokens, likes, saves, dailyReelAnalytics, postMedia, reelPromotions, userMediaPermissions, groupMessages, groupEvents, groupPolls, groupPollOptions, groupJoinRequests, groupMembers, groups, groupInviteRequests, typingStatus, groupEventRsvps, groupPollVotes, conversationSettings, posts, stories, storyViews, storyReplies } from "../drizzle/schema";
 
 const stripe = () => {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -27,6 +27,14 @@ const stripe = () => {
 
 const adminOnly = protectedProcedure.use(({ ctx, next }) => {
   if (!isTanryugramOwner(ctx.user)) throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+  return next({ ctx });
+});
+
+const maintenanceGated = publicProcedure.use(async ({ ctx, next }) => {
+  const settings = await db.getPlatformSettings();
+  if (settings.maintenanceMode && !isTanryugramOwner(ctx.user)) {
+    throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "TanRyuGram is currently under maintenance. Please check back later." });
+  }
   return next({ ctx });
 });
 
@@ -195,6 +203,7 @@ export const appRouter = router({
       };
     }),
   }),
+
   recovery: router({
     settings: publicProcedure.query(async () => {
       const s = await db.getRecoverySupportSettings();
@@ -228,6 +237,9 @@ export const appRouter = router({
 	    }),
   }),
   admin: router({
+    setMaintenance: adminOnly.input(z.object({ enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
+      return await db.setPlatformSetting({ maintenanceMode: input.enabled }, ctx.user.id);
+    }),
     getBadgeApplications: adminOnly.query(async () => await db.getBadgeApplications()),
     reviewBadgeApplication: adminOnly.input(z.object({ applicationId: z.number(), status: z.enum(["approved", "rejected"]) })).mutation(async ({ ctx, input }) => {
       await db.reviewBadgeApplication(input.applicationId, ctx.user.id, input.status);
@@ -583,12 +595,14 @@ export const appRouter = router({
     followers: publicProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
       const database = await db.getDb();
       if (!database) return [];
-      return await database.select({ user: users }).from(follows).innerJoin(users, eq(follows.followerId, users.id)).where(eq(follows.followingId, input.userId));
+      const res = await database.select({ user: users }).from(follows).innerJoin(users, eq(follows.followerId, users.id)).where(eq(follows.followingId, input.userId));
+      return res.map(r => sanitizeAuthUser(r.user));
     }),
     following: publicProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
       const database = await db.getDb();
       if (!database) return [];
-      return await database.select({ user: users }).from(follows).innerJoin(users, eq(follows.followingId, users.id)).where(eq(follows.followerId, input.userId));
+      const res = await database.select({ user: users }).from(follows).innerJoin(users, eq(follows.followingId, users.id)).where(eq(follows.followerId, input.userId));
+      return res.map(r => sanitizeAuthUser(r.user));
     }),
     privacy: protectedProcedure.query(async ({ ctx }) => {
       const database = await db.getDb();
@@ -626,8 +640,36 @@ export const appRouter = router({
     peers: protectedProcedure.query(async ({ ctx }) => {
       const database = await db.getDb();
       if (!database) return [];
-      const res = await database.select({ peer: users }).from(messages).innerJoin(users, or(and(eq(messages.senderId, ctx.user.id), eq(messages.receiverId, users.id)), and(eq(messages.receiverId, ctx.user.id), eq(messages.senderId, users.id)))).groupBy(users.id);
-      return res.map(r => sanitizeAuthUser(r.peer));
+      
+      // Get all unique peers the user has messaged with
+      const peerIdsRes = await database.select({ peerId: sql<number>`CASE WHEN ${messages.senderId} = ${ctx.user.id} THEN ${messages.receiverId} ELSE ${messages.senderId} END` }).from(messages).where(or(eq(messages.senderId, ctx.user.id), eq(messages.receiverId, ctx.user.id))).groupBy(sql`peerId`);
+      const peerIds = peerIdsRes.map(r => r.peerId);
+      if (!peerIds.length) return [];
+
+      const results = [];
+      for (const pid of peerIds) {
+        const peer = await db.getUserById(pid);
+        if (!peer) continue;
+        
+        const [lastMsg] = await database.select().from(messages).where(or(and(eq(messages.senderId, ctx.user.id), eq(messages.receiverId, pid)), and(eq(messages.senderId, pid), eq(messages.receiverId, ctx.user.id)))).orderBy(desc(messages.createdAt)).limit(1);
+        
+        const [unread] = await database.select({ count: count() }).from(messages).where(and(eq(messages.senderId, pid), eq(messages.receiverId, ctx.user.id), eq(messages.isRead, false)));
+        
+        const [settings] = await database.select().from(conversationSettings).where(and(eq(conversationSettings.userId, ctx.user.id), eq(conversationSettings.peerId, pid))).limit(1);
+        
+        results.push({
+          peer: sanitizeAuthUser(peer),
+          lastMessage: lastMsg || null,
+          unreadCount: unread.count,
+          settings: settings || null
+        });
+      }
+      
+      return results.sort((a, b) => {
+        const timeA = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+        const timeB = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
     }),
     createGroup: protectedProcedure.input(z.object({ name: z.string().min(1), description: z.string().optional(), avatarUrl: z.string().optional(), visibility: z.enum(["public", "private"]).optional(), joinMode: z.enum(["open", "approval", "invite"]).optional(), postingMode: z.enum(["all", "admins"]).optional(), memberIds: z.array(z.number()).optional() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
@@ -925,7 +967,15 @@ export const appRouter = router({
     recentCalls: protectedProcedure.query(async ({ ctx }) => {
       const database = await db.getDb();
       if (!database) return [];
-      return await database.select().from(calls).where(or(eq(calls.callerId, ctx.user.id), eq(calls.receiverId, ctx.user.id))).orderBy(desc(calls.startedAt)).limit(20);
+      const callerTable = aliasedTable(users, "caller");
+      const receiverTable = aliasedTable(users, "receiver");
+      const res = await database.select({ call: calls, caller: callerTable, receiver: receiverTable }).from(calls).innerJoin(callerTable, eq(calls.callerId, callerTable.id)).innerJoin(receiverTable, eq(calls.receiverId, receiverTable.id)).where(or(eq(calls.callerId, ctx.user.id), eq(calls.receiverId, ctx.user.id))).orderBy(desc(calls.startedAt)).limit(20);
+      return res.map(r => ({
+        ...r.call,
+        caller: sanitizeAuthUser(r.caller),
+        receiver: sanitizeAuthUser(r.receiver),
+        peer: r.call.callerId === ctx.user.id ? sanitizeAuthUser(r.receiver) : sanitizeAuthUser(r.caller)
+      }));
     }),
     updateCall: protectedProcedure.input(z.object({ callId: z.number(), status: z.enum(["accepted", "declined", "missed", "ended"]), durationSeconds: z.number().optional() })).mutation(async ({ input }) => {
       const database = await db.getDb();
@@ -952,22 +1002,39 @@ export const appRouter = router({
     list: protectedProcedure.query(async ({ ctx }) => {
       const database = await db.getDb();
       if (!database) return [];
-      const res = await database.select({ story: messages, owner: users }).from(messages).innerJoin(users, eq(messages.senderId, users.id)).where(and(eq(messages.receiverId, 0), eq(messages.senderId, ctx.user.id))).orderBy(desc(messages.createdAt));
+      
+      // Get stories from users the current user follows, plus their own stories
+      const followingRes = await database.select({ followingId: follows.followingId }).from(follows).where(eq(follows.followerId, ctx.user.id));
+      const userIds = [ctx.user.id, ...followingRes.map(r => r.followingId)];
+      
+      const res = await database.select({ story: stories, owner: users }).from(stories).innerJoin(users, eq(stories.userId, users.id)).where(and(inArray(stories.userId, userIds), gt(stories.expiresAt, new Date()))).orderBy(desc(stories.createdAt));
+      
       return res.map(r => ({ ...r, owner: sanitizeAuthUser(r.owner) }));
     }),
     viewers: protectedProcedure.input(z.object({ storyId: z.number() })).query(async ({ input }) => {
       const database = await db.getDb();
       if (!database) return { count: 0, viewers: [] };
-      return { count: 0, viewers: [] };
+      const res = await database.select({ viewer: users }).from(storyViews).innerJoin(users, eq(storyViews.userId, users.id)).where(eq(storyViews.storyId, input.storyId));
+      return { count: res.length, viewers: res.map(r => sanitizeAuthUser(r.viewer)) };
     }),
     view: protectedProcedure.input(z.object({ storyId: z.number() })).mutation(async ({ ctx, input }) => {
-      return { success: true };
-    }),
-    create: protectedProcedure.input(z.object({ mediaUrl: z.string(), caption: z.string().optional() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [inserted] = await database.insert(messages).values({ senderId: ctx.user.id, receiverId: 0, content: input.caption || "", attachmentUrl: input.mediaUrl, attachmentType: "image" });
+      await database.insert(storyViews).values({ storyId: input.storyId, userId: ctx.user.id }).onDuplicateKeyUpdate({ set: { createdAt: new Date() } });
+      return { success: true };
+    }),
+    create: protectedProcedure.input(z.object({ mediaUrl: z.string(), mediaType: z.enum(["image", "video"]).optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const [inserted] = await database.insert(stories).values({ userId: ctx.user.id, mediaUrl: input.mediaUrl, mediaType: input.mediaType || "image", expiresAt });
       return inserted.insertId;
+    }),
+    delete: protectedProcedure.input(z.object({ storyId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.delete(stories).where(and(eq(stories.id, input.storyId), eq(stories.userId, ctx.user.id)));
+      return { success: true };
     }),
   }),
   notifications: router({

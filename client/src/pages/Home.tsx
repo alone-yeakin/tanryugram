@@ -141,8 +141,9 @@ export default function Home() {
   const markNotificationsReadMutation = trpc.notifications.markRead.useMutation();
   const registerPushTokenMutation = trpc.notifications.registerPushToken.useMutation();
   const marketplaceQuery = trpc.marketplace.getSettings.useQuery();
+  const maintenanceMode = marketplaceQuery.data?.platform?.maintenanceMode ?? false;
   const eventTheme = marketplaceQuery.data?.platform?.eventTheme ?? null;
-  const incomingCallsQuery = trpc.messages.incomingCalls.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 1200 });
+  const incomingCallsQuery = trpc.messages.incomingCalls.useQuery(undefined, { enabled: isAuthenticated && !maintenanceMode, refetchInterval: 1200 });
   const recentCallsQuery = trpc.messages.recentCalls.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000 });
   const globalCallUpdateMutation = trpc.messages.updateCall.useMutation({ onSuccess: () => incomingCallsQuery.refetch() });
   const announcedCallId = useRef<number | null>(null);
@@ -241,6 +242,22 @@ export default function Home() {
   };
 
   if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground"><div className="rounded-2xl border border-border/70 bg-card px-5 py-4 text-sm text-muted-foreground shadow-sm">Restoring your Tanryugram session…</div></div>;
+
+  if (maintenanceMode && !user?.isOwner) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6 text-center">
+        <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-500">
+          <ShieldCheck className="h-10 w-10" />
+        </div>
+        <h1 className="font-display text-3xl font-bold tracking-tight">TanRyuGram Maintenance</h1>
+        <p className="mt-4 max-w-md text-muted-foreground">We're currently performing some scheduled updates to improve your experience. We'll be back online shortly.</p>
+        <div className="mt-8 flex flex-col gap-3">
+          <button onClick={() => window.location.reload()} className="rounded-2xl bg-foreground px-6 py-3 text-sm font-semibold text-background transition hover:opacity-90">Check again</button>
+          {!isAuthenticated && <button onClick={() => openNativeLogin()} className="text-xs font-medium text-muted-foreground hover:text-foreground underline">Admin Sign In</button>}
+        </div>
+      </div>
+    );
+  }
   if (!isAuthenticated) return <LoginPanel onLogin={openNativeLogin} />;
 
   return <div className="min-h-screen bg-background text-foreground"><header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur-xl"><div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8"><button onClick={() => { setSelectedUser(null); setView("home"); }} className="flex shrink-0 items-center gap-3"><span className="font-display text-xl font-bold tracking-tight">tanryugram<span className="text-violet-500">.</span></span></button><div className="relative hidden max-w-md flex-1 md:block">

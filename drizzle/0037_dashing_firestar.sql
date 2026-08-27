@@ -1,0 +1,1 @@
+ALTER TABLE `platformSettings` ADD `maintenanceMode` boolean DEFAULT false NOT NULL;

@@ -195,19 +195,19 @@ export async function setPlatformPaymentSettings(settings: { paypalEmail?: strin
 
 export async function getPlatformSettings() {
   const db = await getDb();
-  if (!db) return { eventTheme: null };
+  if (!db) return { eventTheme: null, maintenanceMode: false };
   const settings = (await db.select().from(platformSettings).limit(1))[0];
-  return settings || { eventTheme: null };
+  return settings || { eventTheme: null, maintenanceMode: false };
 }
 
-export async function setPlatformSetting(settings: { eventTheme: string | null }, userId: number) {
+export async function setPlatformSetting(settings: { eventTheme?: string | null; maintenanceMode?: boolean }, userId: number) {
   const db = await getDb();
   if (!db) return;
   const existing = (await db.select().from(platformSettings).limit(1))[0];
   if (existing) {
     await db.update(platformSettings).set({ ...settings, updatedBy: userId }).where(eq(platformSettings.id, existing.id));
   } else {
-    await db.insert(platformSettings).values({ ...settings, updatedBy: userId });
+    await db.insert(platformSettings).values({ eventTheme: settings.eventTheme || null, maintenanceMode: settings.maintenanceMode || false, updatedBy: userId });
   }
   return await getPlatformSettings();
 }
