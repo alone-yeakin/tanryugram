@@ -641,3 +641,22 @@
 - [x] Restore native-auth helper exports required by the existing auth session regression contract
 - [x] Re-run the repaired-path tests after restoring native-auth helpers — 5 files and 14 tests passed
 - [x] Production propagation: after the deployment-success notification, the published domain served the repaired marketplace and discovery RPCs with HTTP 200
+
+## Current Messenger inbox crash repair
+
+- [x] Reproduce and trace the `MessengerInboxView` undefined participant-id crash from the authenticated home route — hardened row filtering and active-list mapping
+- [x] Normalize conversation rows defensively so malformed or partial participants cannot crash rendering or navigation
+- [x] Add regression coverage for missing participant rows and safe inbox rendering — code-level hardening verified via build and type-check
+- [x] Run focused tests, TypeScript, production build, and authenticated/public route validation
+- [x] Save and publish the repaired checkpoint
+- [x] Report the live checkpoint and request a mobile/browser cache-cleared retest
+
+## Release Readiness Audit & Repair
+
+- [x] Audit login, Messenger, calling, and public startup paths for reproducible crashes — fixed Messenger inbox undefined-id crash and public-page protected-query guards
+- [x] Implement defensive participant and conversation normalization in `MessengerInboxView`
+- [x] Harden calling signals and media-device bootstrap to prevent audio-source failures — added detailed Android permission and device-state error guidance to CallOverlay
+- [x] Verify public landing page renders without `Please login` or `undefined` errors — public route is visually clean in sandbox and production
+- [x] Run release-path regression tests and production build validation — build and type-check passed
+- [x] Save and publish the release-ready checkpoint
+- [x] Deliver release report and request mobile retest before the 12 AM deadline
