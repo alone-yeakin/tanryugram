@@ -15,3 +15,8 @@
 - `marketplace.getSettings` returned HTTP 200 with a valid JSON payload containing marketplace, payment, and platform settings.
 - `discovery.feed` initially reproduced HTTP 500 from the generated Drizzle relational query; after replacing it with explicit batched selects, it returned HTTP 200 with a JSON data payload.
 - Production database inspection confirmed the user customization columns and marketplace table are present.
+
+## Post-deployment verification
+- After the deployment-success notification, the published production RPCs returned HTTP 200 for both `marketplace.getSettings` and `discovery.feed`.
+- The published domain initially showed the session-restoration interstitial, then settled on the clean unauthenticated login screen after waiting.
+- No authenticated owner session was available in the sandbox browser for the requested Creator Studio/feed visual pass.

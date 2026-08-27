@@ -623,20 +623,21 @@
 - [x] Public discovery feed regression: replace the failing relational post query with an explicit portable query that preserves sanitized post, creator, and media rows
 - [x] Public discovery feed validation: add a focused regression contract, run TypeScript/tests/build, and publish the final repair
 - [x] Final release validation: marketplace RPC, discovery feed RPC, unauthenticated login route, and code-level authenticated contracts verified; authenticated owner visual session was unavailable in this sandbox
-- [ ] User handoff: provide the live checkpoint and ask the user to clear mobile browser/app cache and retest
+- [x] User handoff: provide the live checkpoint and ask the user to clear mobile browser/app cache and retest
 
 - [x] External provider note: Brevo IP-allowlist smoke test remains provider-dependent and is not a code regression
 
 - [x] Current session: harden feed and startup query failures after live RPC smoke test
-- [ ] Current session: save and publish final checkpoint after all validation
-- [ ] Current session: deliver concise verification results and mobile retest request to the user
+- [x] Current session: save and publish final checkpoint after all validation — checkpoint 662d9d62 is live
+- [x] Current session: deliver concise verification results and mobile retest request to the user
 
 - [x] Live discovery smoke test reproduced a separate SQL failure after relation metadata fix; implemented explicit select fallback without changing media storage paths
 
 - [x] Final validation: marketplace settings returns valid JSON, discovery feed returns HTTP 200, and public login route is clean
 
-- [ ] Release handoff: attach checkpoint version and request mobile cache-cleared retest
+- [x] Release handoff: attach checkpoint version and request mobile cache-cleared retest
 
-- [ ] Session completion: reconcile all current session items before checkpoint
+- [x] Session completion: reconcile all current session items before checkpoint
 - [x] Restore native-auth helper exports required by the existing auth session regression contract
 - [x] Re-run the repaired-path tests after restoring native-auth helpers — 5 files and 14 tests passed
+- [x] Production propagation: after the deployment-success notification, the published domain served the repaired marketplace and discovery RPCs with HTTP 200
