@@ -572,3 +572,35 @@
 - [x] Profile Saved Reels: add a dedicated tab to manage bookmarked Reels
 - [x] Reel comment enhancements: add real likes for individual comments and direct user replies
 - [x] Promotion Studio trends: add seven-day visual engagement charts for views, likes, and comments
+
+- [x] Native call reliability: fixed terminated-app ringing, added full-screen intent permissions, and synced FCM notification channels
+- [x] Android release: delivered hardened source code and build guide for native APK compilation
+
+- [x] Firebase relink: registered Android app in the new project and updated server Firebase Admin secrets
+- [x] Firebase validation: verified FCM payload contract and updated the mobile-companion source with the new configuration
+
+- [x] APK release: provided hardened, relinked source code and build guide; direct APK compilation is blocked by the missing Android SDK in the sandbox environment
+
+- [x] In-sandbox build: prepared Android SDK 34 and built the relinked debug APK for direct installation
+
+- [x] APK Fix: Packaged JavaScript bundle into the self-contained release APK (signed with debug key)
+- [x] UI Optimization: Implemented edge-to-edge system bars with transparent navigation and status bars
+- [x] UI Optimization: Applied SafeAreaProvider and adaptive edges to handle notches and navigation bars across all devices
+- [x] APK Fix: Verified the self-contained build artifact is ready for direct installation
+
+- [x] APK Fix: Resolved startup crash by using conservative system bar settings and stable theme configuration
+
+- [x] APK Fix: Resolved native module crash by removing incompatible expo-navigation-bar and expo-system-ui dependencies and reverting to a minimal stable App.tsx
+
+- [ ] Badge Marketplace: Add a catalog of badges (blue, gold, etc.) with pricing and manual payment contact info (PayPal, bKash, Nagad)
+- [ ] Badge Marketplace: Implement mutually exclusive display rules (Blue badge + max one other badge)
+- [ ] Creator Studio: Add owner-only badge request review and approval workflow
+- [ ] Creator Studio: Extend the Gemini assistant to safely handle badge and payment configuration requests
+- [ ] Badge Marketplace: Add regression tests for badge display logic and owner review authorization
+
+- [ ] Badge Marketplace: Expand badge catalog with Gold, VIP, Founder, and Legend tiers
+- [ ] Badge Marketplace: Implement mutually exclusive display logic (Blue + one other, or just one other)
+- [ ] Profile Customization: Add Discord-style themes, custom text colors, and background accents
+- [ ] Premium Messaging: Overhaul group message UI with better layouts, transitions, and status indicators
+- [ ] Platform Settings: Add owner-managed payment contact instructions for PayPal, bKash, and Nagad
+- [ ] Creator Studio: Add manual approval workflow for paid badge requests

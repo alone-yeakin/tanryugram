@@ -10,57 +10,47 @@ import { sendVerificationEmail } from "./gmailMailer";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { storagePresignPut, storagePut } from "./storage";
 import * as db from "./db";
-import { eq, and, count, desc, sql } from "drizzle-orm";
+import { eq, and, count, desc, sql, or, ne, inArray, lt, like, asc, isNull, isNotNull } from "drizzle-orm";
 import { sdk } from "./_core/sdk";
 import { ENV } from "./_core/env";
 import { sendIncomingCallPush } from "./firebaseAdmin";
 import { checkEmailCodeRateLimit } from "./emailRateLimit";
 import { buildUserMigrationArchive, importUserMigrationArchive, inspectUserMigrationArchive, USER_MIGRATION_MAX_BYTES } from "./userMigration";
 import { applySafeGeminiActions, generateGeminiChatReply, generateGeminiFeatureProposal } from "./geminiAssistant";
-import { users, messages, emailVerificationCodes, userSettings } from "../drizzle/schema";
+import { users, messages, emailVerificationCodes, userSettings, badgeMarketplaceSettings, badgeApplications, platformPaymentSettings, recoverySupportRequests, recoverySupportMessages, contentAppeals, follows, reelSubmissions, reelBookmarks, contentReports, reelComments, reelLikes, reelViews, messageReactions, calls, notifications, comments, pushTokens, likes, saves, dailyReelAnalytics, postMedia, reelPromotions, userMediaPermissions, groupMessages, groupEvents, groupPolls, groupPollOptions, groupJoinRequests, groupMembers, groups, groupInviteRequests, typingStatus, groupEventRsvps, groupPollVotes, conversationSettings, posts } from "../drizzle/schema";
 
 const stripe = () => {
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Stripe is not configured. Add keys in Settings → Payment." });
+  if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Stripe is not configured." });
   return new Stripe(key, { apiVersion: "2025-02-24.acacia" as any });
 };
-const ownerOnly = protectedProcedure.use(({ ctx, next }) => {
-  if (!isTanryugramOwner(ctx.user)) throw new TRPCError({ code: "FORBIDDEN", message: "Owner access required" });
+
+const adminOnly = protectedProcedure.use(({ ctx, next }) => {
+  if (!isTanryugramOwner(ctx.user)) throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
   return next({ ctx });
 });
-const GROUP_ATTACHMENT_MAX_BYTES = 12 * 1024 * 1024;
+
 const PHOTO_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const VIDEO_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
 const IMAGE_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const VIDEO_CONTENT_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
-function cleanUploadFileName(fileName: string) {
-  return fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 160) || "upload";
-}
-async function validateMediaUpload(contentType: string, sizeBytes?: number, purpose: "post" | "profile" | "reel" = "post", userId?: number) {
+
+async function validateMediaUpload(contentType: string, sizeBytes?: number, purpose: "post" | "profile" | "reel" | "banner" = "post", userId?: number) {
   const policy = await db.getMediaUploadPolicy();
   if (userId && (purpose === "post" || purpose === "reel")) {
     const permissions = await db.getUserMediaPermissions(userId);
-    if (purpose === "reel" && !permissions.reelsEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Reel posting is currently disabled for this account" });
-    if (purpose === "post" && !permissions.postsEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Posting is currently disabled for this account" });
-    if (purpose === "post" && IMAGE_CONTENT_TYPES.has(contentType) && !permissions.photosEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Photo posting is currently disabled for this account" });
-    if (purpose === "post" && VIDEO_CONTENT_TYPES.has(contentType) && !permissions.videosEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Video posting is currently disabled for this account" });
+    if (purpose === "reel" && !permissions.reelsEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Reel posting is disabled" });
+    if (purpose === "post" && !permissions.postsEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Posting is disabled" });
   }
   const isImage = IMAGE_CONTENT_TYPES.has(contentType);
   const isVideo = VIDEO_CONTENT_TYPES.has(contentType);
-  if (!isImage && !isVideo) throw new TRPCError({ code: "UNSUPPORTED_MEDIA_TYPE", message: "Only JPG, PNG, WEBP, GIF, MP4, WEBM, and MOV files are supported" });
-  if (isImage && purpose === "profile" && !policy.profilePhotosEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Profile photo uploads are temporarily paused by the owner" });
-  if (isImage && purpose === "post" && !policy.photosEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Photo uploads are temporarily paused by the owner" });
-  if (isVideo && !policy.videosEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Video uploads are currently paused to protect beta storage" });
+  if (!isImage && !isVideo) throw new TRPCError({ code: "UNSUPPORTED_MEDIA_TYPE" });
+  if (isImage && (purpose === "profile" || purpose === "banner") && !policy.profilePhotosEnabled) throw new TRPCError({ code: "FORBIDDEN" });
+  if (isImage && purpose === "post" && !policy.photosEnabled) throw new TRPCError({ code: "FORBIDDEN" });
+  if (isVideo && !policy.videosEnabled) throw new TRPCError({ code: "FORBIDDEN" });
   const maxBytes = isVideo ? VIDEO_UPLOAD_MAX_BYTES : PHOTO_UPLOAD_MAX_BYTES;
-  if (sizeBytes !== undefined && sizeBytes > maxBytes) throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: `${isVideo ? "Video" : "Photo"} uploads must be ${Math.round(maxBytes / 1024 / 1024)} MB or smaller` });
+  if (sizeBytes !== undefined && sizeBytes > maxBytes) throw new TRPCError({ code: "PAYLOAD_TOO_LARGE" });
   return isVideo ? "video" as const : "image" as const;
-}
-function classifyGroupAttachment(contentType: string) {
-  if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(contentType)) return "image" as const;
-  if (["video/mp4", "video/webm", "video/quicktime"].includes(contentType)) return "video" as const;
-  if (["audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/wav"].includes(contentType)) return "audio" as const;
-  if (["application/pdf", "text/plain", "text/csv", "application/zip", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"].includes(contentType)) return "file" as const;
-  throw new TRPCError({ code: "UNSUPPORTED_MEDIA_TYPE", message: "This group attachment type is not supported" });
 }
 
 export const sanitizeAuthUser = (user: any) => {
@@ -69,337 +59,921 @@ export const sanitizeAuthUser = (user: any) => {
   return { ...safeUser, isOwner: isTanryugramOwner(user) };
 };
 
-export const hasNativePassword = (user: any) => Boolean(user?.passwordHash);
-export const requiresEmailVerification = (totalUsers: number, verificationCode?: string | null) => totalUsers >= 1 && !verificationCode?.trim();
 export const isVerificationCodeValid = (record: { expiresAt: Date | string } | undefined, now = new Date()) => Boolean(record && now <= new Date(record.expiresAt));
-
-function hashGuestToken(token: string) {
-  return createHash("sha256").update(token).digest("hex");
-}
-function normalizeWhatsAppNumber(value: string) {
-  const normalized = value.replace(/[\s().-]/g, "");
-  if (!/^\+[1-9][0-9]{6,14}$/.test(normalized)) throw new TRPCError({ code: "BAD_REQUEST", message: "Use an international WhatsApp number beginning with +." });
-  return normalized;
-}
 
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(({ ctx }) => sanitizeAuthUser(ctx.user)),
+    me: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user) return null;
+      const user = await db.getUserById(ctx.user.id);
+      return sanitizeAuthUser(user);
+    }),
     logout: publicProcedure.mutation(({ ctx }) => { ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), maxAge: -1 }); return { success: true } as const; }),
     signup: publicProcedure.input(z.object({ email: z.string().email(), password: z.string().min(6), name: z.string().min(1), username: z.string().min(3), gender: z.enum(["woman", "man", "non_binary", "prefer_not_to_say"]).optional(), verificationCode: z.string().optional() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
-      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const existing = (await database.select().from(users).where(eq(users.email, input.email)).limit(1))[0];
-      if (existing) throw new TRPCError({ code: "CONFLICT", message: "Email already registered" });
-      const existingUser = (await database.select().from(users).where(eq(users.username, input.username)).limit(1))[0];
-      if (existingUser) throw new TRPCError({ code: "CONFLICT", message: "Username already taken" });
+      if (existing) throw new TRPCError({ code: "CONFLICT" });
       
       const emailSettings = await db.getEmailDeliverySettings();
       if (emailSettings.signupVerificationEnabled) {
-        if (!emailSettings.emailDeliveryEnabled) {
-          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Signup verification is enabled, but email delivery is currently disabled by the owner." });
-        }
         if (!input.verificationCode?.trim()) {
-          const rate = checkEmailCodeRateLimit(input.email, "signup");
-          if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Please wait ${rate.retryAfterSeconds} seconds before requesting another signup code.` });
           const code = Math.floor(100000 + Math.random() * 900000).toString();
           const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
           await database.insert(emailVerificationCodes).values({ email: input.email, code, expiresAt });
-          try {
-            await sendVerificationEmail({ to: input.email, code, purpose: "signup" }, { transport: emailSettings.appScriptLoginEnabled ? "apps-script" : "automatic" });
-          } catch (error) {
-            await database.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, input.email));
-            console.error("[EmailVerification] Delivery failed without exposing the code", error instanceof Error ? error.message : "unknown error");
-            throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "We could not send the verification email. The owner can temporarily disable signup verification while delivery is repaired." });
-          }
-          return { success: false, requiresVerification: true, message: "A verification code was sent to your email. It expires in 15 minutes." };
+          await sendVerificationEmail({ to: input.email, code, purpose: "signup" }, { transport: emailSettings.appScriptLoginEnabled ? "apps-script" : "automatic" });
+          return { success: false, requiresVerification: true };
         }
         const record = (await database.select().from(emailVerificationCodes).where(and(eq(emailVerificationCodes.email, input.email), eq(emailVerificationCodes.code, input.verificationCode.trim()))).limit(1))[0];
-        if (!isVerificationCodeValid(record)) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired verification code." });
+        if (!isVerificationCodeValid(record)) throw new TRPCError({ code: "BAD_REQUEST" });
         await database.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, input.email));
       }
 
       const openId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       const passwordHash = Buffer.from(input.password).toString("base64");
-      const [insertedId] = await database.insert(users).values({
-        openId,
-        email: input.email,
-        name: input.name,
-        username: input.username,
-        passwordHash,
-        avatarUrl: null,
-        isVerified: false,
-        role: "user"
-      });
-      await database.insert(userSettings).values({ userId: Number(insertedId.insertId || 0), gender: input.gender ?? null });
-      const insertedPk = Number(insertedId.insertId || 0);
-      const newUser = (await database.select().from(users).where(eq(users.id, insertedPk)).limit(1))[0] || (await database.select().from(users).where(eq(users.openId, openId)).limit(1))[0];
-      
-      if (isTanryugramOwner(newUser) && (newUser.role !== "admin" || !newUser.isVerified)) {
-        await database.update(users).set({ role: "admin", isVerified: true }).where(eq(users.id, newUser.id));
-      }
-      const token = await sdk.createSessionToken(newUser.openId, { expiresInMs: 30 * 24 * 60 * 60 * 1000, name: newUser.name || newUser.email || "Tanryugram user" });
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
-      return { success: true, requiresVerification: false, user: sanitizeAuthUser(newUser), sessionToken: token };
+      const [inserted] = await database.insert(users).values({ openId, email: input.email, name: input.name, username: input.username, passwordHash, role: "user" });
+      await database.insert(userSettings).values({ userId: Number(inserted.insertId), gender: input.gender ?? null });
+      const newUser = await db.getUserById(Number(inserted.insertId));
+      if (isTanryugramOwner(newUser)) await database.update(users).set({ role: "admin", isVerified: true }).where(eq(users.id, newUser!.id));
+      const token = await sdk.createSessionToken(newUser!.openId, { expiresInMs: 30 * 24 * 60 * 60 * 1000, name: newUser!.name || "User" });
+      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 30 * 24 * 60 * 60 * 1000 });
+      return { success: true, sessionToken: token, user: sanitizeAuthUser(newUser) };
     }),
     login: publicProcedure.input(z.object({ email: z.string().email(), password: z.string().min(1) })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
-      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const found = (await database.select().from(users).where(eq(users.email, input.email)).limit(1))[0];
-      if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found with this email" });
-      
-      if (!hasNativePassword(found)) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "This account has no native password yet. Use Forgot password? to set a TanRyuGram password with a verification code." });
-      }
-      const expectedHash = Buffer.from(input.password).toString("base64");
-      if (found.passwordHash !== expectedHash) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Incorrect password" });
-      }
-      
-      if (isTanryugramOwner(found) && (found.role !== "admin" || !found.isVerified)) {
-        await database.update(users).set({ role: "admin", isVerified: true }).where(eq(users.id, found.id));
-      }
-      const token = await sdk.createSessionToken(found.openId, { expiresInMs: 30 * 24 * 60 * 60 * 1000, name: found.name || found.email || "Tanryugram user" });
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
-      return { success: true, user: sanitizeAuthUser(found), sessionToken: token };
+      if (!found || found.passwordHash !== Buffer.from(input.password).toString("base64")) throw new TRPCError({ code: "UNAUTHORIZED" });
+      if (isTanryugramOwner(found)) await database.update(users).set({ role: "admin", isVerified: true }).where(eq(users.id, found.id));
+      const token = await sdk.createSessionToken(found.openId, { expiresInMs: 30 * 24 * 60 * 60 * 1000, name: found.name || "User" });
+      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: 30 * 24 * 60 * 60 * 1000 });
+      return { success: true, sessionToken: token, user: sanitizeAuthUser(found) };
     }),
     requestPasswordReset: publicProcedure.input(z.object({ email: z.string().email() })).mutation(async ({ input }) => {
       const database = await db.getDb();
-      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-      const found = (await database.select().from(users).where(eq(users.email, input.email)).limit(1))[0];
-      if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "No account found with this email address" });
-      const emailSettings = await db.getEmailDeliverySettings();
-      if (!emailSettings.emailDeliveryEnabled) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Email delivery is currently disabled by the owner." });
-      const rate = checkEmailCodeRateLimit(input.email, "password-reset");
-      if (!rate.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Please wait ${rate.retryAfterSeconds} seconds before requesting another reset code.` });
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const user = (await database.select().from(users).where(eq(users.email, input.email)).limit(1))[0];
+      if (!user) return { success: true };
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
       await database.insert(emailVerificationCodes).values({ email: input.email, code, expiresAt });
-      
-      try {
-        await sendVerificationEmail({ to: input.email, code, purpose: "password-reset" }, { transport: emailSettings.appScriptResetEnabled ? "apps-script" : "automatic" });
-      } catch (error) {
-        await database.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, input.email));
-        console.error("[PasswordReset] Delivery failed without exposing the code", error instanceof Error ? error.message : "unknown error");
-        throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "We could not send the password-reset email. Please try again later." });
-      }
-
-      return { success: true, message: "If an account exists, a password-reset code was sent to its email address." };
+      const emailSettings = await db.getEmailDeliverySettings();
+      await sendVerificationEmail({ to: input.email, code, purpose: "password-reset" }, { transport: emailSettings.appScriptResetEnabled ? "apps-script" : "automatic" });
+      return { success: true };
     }),
-    confirmPasswordReset: publicProcedure.input(z.object({ email: z.string().email(), code: z.string().min(6), newPassword: z.string().min(6) })).mutation(async ({ input }) => {
+    confirmPasswordReset: publicProcedure.input(z.object({ email: z.string().email(), code: z.string(), newPassword: z.string().min(6) })).mutation(async ({ input }) => {
       const database = await db.getDb();
-      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-      const validCode = (await database.select().from(emailVerificationCodes).where(and(eq(emailVerificationCodes.email, input.email), eq(emailVerificationCodes.code, input.code), sql`${emailVerificationCodes.expiresAt} > NOW()`)).orderBy(desc(emailVerificationCodes.createdAt)).limit(1))[0];
-      if (!isVerificationCodeValid(validCode)) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired verification code" });
-      }
-      const found = (await database.select().from(users).where(eq(users.email, input.email)).limit(1))[0];
-      if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "No account found with this email address" });
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const record = (await database.select().from(emailVerificationCodes).where(and(eq(emailVerificationCodes.email, input.email), eq(emailVerificationCodes.code, input.code.trim()))).limit(1))[0];
+      if (!isVerificationCodeValid(record)) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired code" });
       const passwordHash = Buffer.from(input.newPassword).toString("base64");
-      await database.update(users).set({ passwordHash }).where(eq(users.id, found.id));
-      return { success: true, message: "Password updated successfully with verification code. You can now sign in." };
+      await database.update(users).set({ passwordHash }).where(eq(users.email, input.email));
+      await database.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, input.email));
+      return { success: true };
+    }),
+  }),
+  profile: router({
+    byId: publicProcedure.input(z.object({ username: z.string().optional(), userId: z.number().optional() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return null;
+      const user = input.userId ? await db.getUserById(input.userId) : await database.query.users.findFirst({ where: eq(users.username, input.username!) });
+      return { user: sanitizeAuthUser(user), posts: [], stats: { followers: 0, following: 0, posts: 0 }, privacy: { isPrivate: false } };
+    }),
+    update: protectedProcedure.input(z.object({ 
+      themeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+      customTextColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+      profileBannerUrl: z.string().nullable().optional(),
+      profileEffect: z.string().nullable().optional(),
+      bio: z.string().max(500).optional(),
+      name: z.string().min(1).max(100).optional(),
+      avatarUrl: z.string().nullable().optional(),
+      username: z.string().min(3).max(64).optional(),
+      subscriptionPrice: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      return await db.updateUser(ctx.user.id, input);
+    }),
+    applyForBadge: protectedProcedure.input(z.object({ requestedBadge: z.enum(["blue", "black", "gold", "vip", "founder", "legend"]), reason: z.string().optional() })).mutation(async ({ ctx, input }) => {
+      return await db.applyForBadge(ctx.user.id, input.requestedBadge, input.reason);
+    }),
+    myBadgeApplications: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getBadgeApplications(ctx.user.id);
+    }),
+    presignBannerUpload: protectedProcedure.input(z.object({ fileName: z.string(), contentType: z.string(), sizeBytes: z.number().optional() })).mutation(async ({ ctx, input }) => {
+      await validateMediaUpload(input.contentType, input.sizeBytes, "banner", ctx.user.id);
+      const key = `banners/${ctx.user.id}/${Date.now()}-${randomBytes(4).toString("hex")}-${input.fileName}`;
+      return await storagePresignPut(key, input.contentType);
+    }),
+  }),
+  marketplace: router({
+    getSettings: publicProcedure.query(async () => {
+      return {
+        marketplace: await db.getBadgeMarketplaceSettings(),
+        payments: await db.getPlatformPaymentSettings(),
+        platform: await db.getPlatformSettings(),
+      };
     }),
   }),
   recovery: router({
     settings: publicProcedure.query(async () => {
-      const settings = await db.getRecoverySupportSettings();
-      const digits = settings.whatsappSupportNumber.replace(/\D/g, "");
-      return { guestRecoveryEnabled: settings.guestRecoveryEnabled, whatsappSupportEnabled: settings.whatsappSupportEnabled, whatsappSupportNumber: settings.whatsappSupportNumber, whatsappLink: settings.whatsappSupportEnabled ? `https://wa.me/${digits}` : null };
+      const s = await db.getRecoverySupportSettings();
+      return { ...s, whatsappLink: s.whatsappSupportEnabled ? `https://wa.me/${s.whatsappSupportNumber.replace("+", "")}` : null };
     }),
-    createGuest: publicProcedure.input(z.object({ accountEmail: z.string().email().optional(), guestLabel: z.string().trim().min(1).max(80).optional() })).mutation(async ({ input }) => {
-      const settings = await db.getRecoverySupportSettings();
-      if (!settings.guestRecoveryEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Guest recovery support is currently disabled." });
-      const token = randomBytes(32).toString("base64url");
-      const request = await db.createRecoverySupportRequest({ guestTokenHash: hashGuestToken(token), accountEmail: input.accountEmail, guestLabel: input.guestLabel });
-      if (!request) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Recovery support is temporarily unavailable." });
-      return { requestId: request.id, guestToken: token, expiresAt: request.expiresAt };
+    createGuest: publicProcedure.input(z.object({ guestLabel: z.string().optional(), accountEmail: z.string().email().optional(), reason: z.string().min(10).optional() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const token = randomBytes(16).toString("hex");
+      const guestToken = `${token}`;
+      await database.insert(recoverySupportRequests).values({ guestLabel: input.guestLabel || "Guest", accountEmail: input.accountEmail || null, guestTokenHash: createHash("sha256").update(token).digest("hex"), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
+      return { guestToken };
     }),
-    thread: publicProcedure.input(z.object({ guestToken: z.string().min(20).max(128) })).query(async ({ input }) => {
-      const request = await db.getRecoverySupportRequestByHash(hashGuestToken(input.guestToken));
-      if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This recovery guest ID is invalid or expired." });
-      const inbox = await db.getRecoverySupportInbox();
-      return inbox.find((item) => item.id === request.id) ?? { id: request.id, messages: [] };
+    thread: publicProcedure.input(z.object({ guestToken: z.string() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const req = await database.query.recoverySupportRequests.findFirst({ where: eq(recoverySupportRequests.guestTokenHash, createHash("sha256").update(input.guestToken).digest("hex")), with: { messages: true } });
+      if (!req) throw new TRPCError({ code: "NOT_FOUND" });
+      return { ...req, messages: req.messages || [] };
     }),
-    sendMessage: publicProcedure.input(z.object({ guestToken: z.string().min(20).max(128), body: z.string().trim().min(1).max(1000) })).mutation(async ({ input }) => {
-      const request = await db.getRecoverySupportRequestByHash(hashGuestToken(input.guestToken));
-      if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "This recovery guest ID is invalid or expired." });
-      if (request.lastMessageAt && Date.now() - new Date(request.lastMessageAt).getTime() < 30_000) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Please wait 30 seconds before sending another recovery message." });
-      await db.addRecoverySupportMessage(request.id, "guest", input.body.trim());
-      return { success: true, message: "Your recovery request was sent to the owner." };
+    sendMessage: publicProcedure.input(z.object({ guestToken: z.string(), body: z.string().min(1) })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const req = await database.query.recoverySupportRequests.findFirst({ where: eq(recoverySupportRequests.guestTokenHash, createHash("sha256").update(input.guestToken).digest("hex")) });
+      if (!req) throw new TRPCError({ code: "NOT_FOUND" });
+      await database.insert(recoverySupportMessages).values({ requestId: req.id, senderType: "guest", body: input.body });
+      await database.update(recoverySupportRequests).set({ lastMessageAt: new Date() }).where(eq(recoverySupportRequests.id, req.id));
+    }),
+  }),
+  admin: router({
+    getBadgeApplications: adminOnly.query(async () => await db.getBadgeApplications()),
+    reviewBadgeApplication: adminOnly.input(z.object({ applicationId: z.number(), status: z.enum(["approved", "rejected"]) })).mutation(async ({ ctx, input }) => {
+      await db.reviewBadgeApplication(input.applicationId, ctx.user.id, input.status);
+    }),
+    setMarketplaceSetting: adminOnly.input(z.object({ badgeType: z.enum(["blue", "black", "gold", "vip", "founder", "legend"]), isPaid: z.boolean(), price: z.string() })).mutation(async ({ ctx, input }) => {
+      await db.setBadgeMarketplaceSetting(input.badgeType, input.isPaid, input.price, ctx.user.id);
+    }),
+    setPaymentSettings: adminOnly.input(z.object({ paypalEmail: z.string().nullable(), bkashNumber: z.string().nullable(), nagadNumber: z.string().nullable(), instructions: z.string().nullable() })).mutation(async ({ ctx, input }) => {
+      await db.setPlatformPaymentSettings(input, ctx.user.id);
+    }),
+    setPlatformSetting: adminOnly.input(z.object({ eventTheme: z.string().nullable() })).mutation(async ({ ctx, input }) => {
+      await db.setPlatformSetting(input, ctx.user.id);
+    }),
+    setBadge: adminOnly.input(z.object({ userId: z.number(), badgeType: z.enum(["none", "blue", "black", "gold", "vip", "founder", "legend"]), isSecondary: z.boolean().optional() })).mutation(async ({ input }) => {
+      await db.setUserBadge(input.userId, input.badgeType, input.isSecondary);
+    }),
+    setCreator: adminOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(async ({ input }) => {
+      await db.setUserCreator(input.userId, input.value);
+    }),
+    setBadgeLabel: adminOnly.input(z.object({ userId: z.number(), label: z.string() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(users).set({ badgeLabel: input.label }).where(eq(users.id, input.userId));
+    }),
+    setShowBadge: adminOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(users).set({ showBadge: input.value }).where(eq(users.id, input.userId));
+    }),
+    setDisplayedFollowers: adminOnly.input(z.object({ userId: z.number(), count: z.number().nullable() })).mutation(async ({ input }) => {
+      await db.setDisplayedFollowersCount(input.userId, input.count);
+    }),
+    banUser: adminOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(users).set({ isBanned: input.value }).where(eq(users.id, input.userId));
+    }),
+    setRole: adminOnly.input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) })).mutation(async ({ input }) => {
+      await db.setUserRole(input.userId, input.role);
+    }),
+    setUserMediaPermissions: adminOnly.input(z.object({ userId: z.number(), postsEnabled: z.boolean(), photosEnabled: z.boolean(), videosEnabled: z.boolean(), reelsEnabled: z.boolean(), storiesEnabled: z.boolean() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(userMediaPermissions).values(input).onDuplicateKeyUpdate({ set: input });
+    }),
+    verifyUser: adminOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(async ({ input }) => {
+      await db.verifyUser(input.userId, input.value);
+    }),
+    reelsPromotions: adminOnly.query(async () => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select({ promotion: reelPromotions, reel: reelSubmissions, user: users }).from(reelPromotions).innerJoin(reelSubmissions, eq(reelPromotions.reelId, reelSubmissions.id)).innerJoin(users, eq(reelSubmissions.userId, users.id));
+    }),
+    setReelPromotion: adminOnly.input(z.object({ reelId: z.number(), isPromoted: z.boolean(), priority: z.number().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.isPromoted) {
+        await database.insert(reelPromotions).values({ reelId: input.reelId, priority: input.priority ?? 1, ownerId: ctx.user.id }).onDuplicateKeyUpdate({ set: { priority: input.priority ?? 1, ownerId: ctx.user.id } });
+      } else {
+        await database.delete(reelPromotions).where(eq(reelPromotions.reelId, input.reelId));
+      }
+    }),
+    geminiProposal: adminOnly.input(z.object({ request: z.string() })).mutation(async ({ input }) => {
+      const emailSettings = await db.getEmailDeliverySettings();
+      const mediaPolicy = await db.getMediaUploadPolicy();
+      const currentSettings = { ...emailSettings, ...mediaPolicy };
+      return await generateGeminiFeatureProposal(input.request, currentSettings);
+    }),
+    badgeApplications: router({
+      invalidate: adminOnly.query(async () => null),
+    }),
+    users: router({
+      list: adminOnly.query(async () => await db.getUsers()),
+      invalidate: adminOnly.query(async () => null),
+    }),
+    reports: router({
+      list: adminOnly.query(async () => await db.getReports()),
+      invalidate: adminOnly.query(async () => null),
+    }),
+    reviewReport: adminOnly.input(z.object({ reportId: z.number(), status: z.enum(["reviewed", "dismissed"]) })).mutation(async ({ ctx, input }) => {
+      await db.reviewReport(input.reportId, ctx.user.id, input.status);
+    }),
+    reviewReel: adminOnly.input(z.object({ reelId: z.number(), status: z.enum(["approved", "rejected"]), reviewNote: z.string().optional() })).mutation(async ({ ctx, input }) => {
+      await db.reviewReel(input.reelId, ctx.user.id, input.status, input.reviewNote);
+    }),
+    reviewAppeal: adminOnly.input(z.object({ appealId: z.number(), status: z.enum(["approved", "rejected"]), response: z.string().optional() })).mutation(async ({ ctx, input }) => {
+      await db.reviewAppeal(input.appealId, ctx.user.id, input.status, input.response);
+    }),
+    getReports: adminOnly.query(async () => await db.getReports()),
+    getAppeals: adminOnly.query(async () => await db.getAppeals()),
+    getAuditLog: adminOnly.query(async () => await db.getAuditLog()),
+    getReels: adminOnly.query(async () => await db.getReels()),
+    getMediaPolicy: adminOnly.query(async () => await db.getMediaUploadPolicy()),
+    setMediaPolicy: adminOnly.input(z.object({ photosEnabled: z.boolean(), profilePhotosEnabled: z.boolean(), videosEnabled: z.boolean() })).mutation(async ({ ctx, input }) => {
+      await db.setMediaUploadPolicy(input, ctx.user.id);
+    }),
+    getEmailSettings: adminOnly.query(async () => await db.getEmailDeliverySettings()),
+    setEmailSettings: adminOnly.input(z.object({ emailDeliveryEnabled: z.boolean(), signupVerificationEnabled: z.boolean(), appScriptLoginEnabled: z.boolean(), appScriptResetEnabled: z.boolean() })).mutation(async ({ ctx, input }) => {
+      await db.setEmailDeliverySettings(input, ctx.user.id);
+    }),
+    getRecoverySettings: adminOnly.query(async () => await db.getRecoverySupportSettings()),
+    setRecoverySettings: adminOnly.input(z.object({ guestRecoveryEnabled: z.boolean(), whatsappSupportEnabled: z.boolean(), whatsappSupportNumber: z.string() })).mutation(async ({ ctx, input }) => {
+      await db.setRecoverySupportSettings(input, ctx.user.id);
+    }),
+    getRecoveryInbox: adminOnly.query(async () => await db.getRecoveryInbox()),
+    recoveryInbox: router({
+      invalidate: adminOnly.query(async () => null),
+    }),
+    replyRecovery: adminOnly.input(z.object({ requestId: z.number(), body: z.string() })).mutation(async ({ ctx, input }) => {
+      await db.replyRecovery(input.requestId, input.body);
+    }),
+    closeRecovery: adminOnly.input(z.object({ requestId: z.number() })).mutation(async ({ input }) => {
+      await db.closeRecovery(input.requestId);
+    }),
+    posts: router({
+      list: adminOnly.query(async () => await db.getPosts()),
+      invalidate: adminOnly.query(async () => null),
+    }),
+    deletePost: adminOnly.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => {
+      await db.deletePostAsUser(input.postId, ctx.user.id, true);
+    }),
+    reelsAnalytics: adminOnly.input(z.object({ reelIds: z.array(z.number()).optional() }).optional()).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const query = database.select({ reel: reelSubmissions, user: users, views: count(reelViews.id), likes: count(reelLikes.id), comments: count(reelComments.id) }).from(reelSubmissions).innerJoin(users, eq(reelSubmissions.userId, users.id)).leftJoin(reelViews, eq(reelSubmissions.id, reelViews.reelId)).leftJoin(reelLikes, eq(reelSubmissions.id, reelLikes.reelId)).leftJoin(reelComments, eq(reelSubmissions.id, reelComments.reelId));
+      if (input?.reelIds?.length) {
+        query.where(inArray(reelSubmissions.id, input.reelIds));
+      }
+      return await query.groupBy(reelSubmissions.id);
+    }),
+    reelTrends: adminOnly.input(z.object({ reelId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select().from(dailyReelAnalytics).where(eq(dailyReelAnalytics.reelId, input.reelId)).orderBy(asc(dailyReelAnalytics.date));
+    }),
+    geminiChat: adminOnly.input(z.object({ messages: z.array(z.object({ role: z.enum(["user", "model"]), content: z.string() })) })).mutation(async ({ input }) => {
+      const emailSettings = await db.getEmailDeliverySettings();
+      const mediaPolicy = await db.getMediaUploadPolicy();
+      const currentSettings = { ...emailSettings, ...mediaPolicy };
+      const content = await generateGeminiChatReply(input.messages.map(m => ({ role: m.role === "model" ? "assistant" as const : "user" as const, content: m.content })), currentSettings);
+      return { content };
+    }),
+    geminiApplySafeActions: adminOnly.input(z.any()).mutation(async ({ ctx, input }) => {
+      const emailSettings = await db.getEmailDeliverySettings();
+      const mediaPolicy = await db.getMediaUploadPolicy();
+      const currentSettings = { ...emailSettings, ...mediaPolicy };
+      const next = await applySafeGeminiActions(input, currentSettings);
+      await db.setEmailDeliverySettings({
+        emailDeliveryEnabled: next.emailDeliveryEnabled,
+        signupVerificationEnabled: next.signupVerificationEnabled,
+        appScriptLoginEnabled: next.appScriptLoginEnabled,
+        appScriptResetEnabled: next.appScriptResetEnabled
+      }, ctx.user.id);
+      await db.setMediaUploadPolicy({
+        photosEnabled: next.photosEnabled,
+        profilePhotosEnabled: next.profilePhotosEnabled,
+        videosEnabled: next.videosEnabled
+      }, ctx.user.id);
+      return { applied: true };
+    }),
+  }),
+  posts: router({
+    list: publicProcedure.input(z.object({ limit: z.number().optional(), offset: z.number().optional() }).optional()).query(async () => await db.getPosts()),
+    delete: protectedProcedure.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => {
+      await db.deletePostAsUser(input.postId, ctx.user.id, isTanryugramOwner(ctx.user));
+    }),
+    comment: protectedProcedure.input(z.object({ postId: z.number(), content: z.string().min(1) })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(comments).values({ userId: ctx.user.id, ...input });
+    }),
+    like: protectedProcedure.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const existing = (await database.select().from(likes).where(and(eq(likes.postId, input.postId), eq(likes.userId, ctx.user.id))).limit(1))[0];
+      if (existing) {
+        await database.delete(likes).where(eq(likes.id, existing.id));
+        return { liked: false };
+      }
+      await database.insert(likes).values({ postId: input.postId, userId: ctx.user.id });
+      return { liked: true };
+    }),
+    reaction: protectedProcedure.input(z.object({ postId: z.number(), reactionType: z.string() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(messageReactions).values({ messageId: input.postId, userId: ctx.user.id, reaction: input.reactionType }).onDuplicateKeyUpdate({ set: { reaction: input.reactionType } });
+    }),
+    reactions: protectedProcedure.input(z.object({ postId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const res = await database.select({ reaction: messageReactions, user: users }).from(messageReactions).innerJoin(users, eq(messageReactions.userId, users.id)).where(eq(messageReactions.messageId, input.postId));
+      return res.map(r => ({ ...r, user: sanitizeAuthUser(r.user), reaction: { ...r.reaction, reactionType: r.reaction.reaction } }));
+    }),
+    create: protectedProcedure.input(z.object({ content: z.string(), location: z.string().optional(), mediaUrls: z.array(z.string()).optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [post] = await database.insert(posts).values({ userId: ctx.user.id, caption: input.content, mediaUrl: input.mediaUrls?.[0] || "", location: input.location }).$returningId();
+      if (input.mediaUrls && input.mediaUrls.length > 1) {
+        for (let i = 1; i < input.mediaUrls.length; i++) {
+          await database.insert(postMedia).values({ postId: post.id, mediaUrl: input.mediaUrls[i], sortOrder: i });
+        }
+      }
+      return post.id;
+    }),
+    save: protectedProcedure.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const existing = (await database.select().from(saves).where(and(eq(saves.postId, input.postId), eq(saves.userId, ctx.user.id))).limit(1))[0];
+      if (existing) {
+        await database.delete(saves).where(eq(saves.id, existing.id));
+        return { saved: false };
+      }
+      await database.insert(saves).values({ postId: input.postId, userId: ctx.user.id });
+      return { saved: true };
+    }),
+    comments: publicProcedure.input(z.object({ postId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const res = await database.select({ comment: comments, author: users }).from(comments).innerJoin(users, eq(comments.userId, users.id)).where(eq(comments.postId, input.postId)).orderBy(desc(comments.createdAt));
+      return res.map(r => ({ ...r, author: sanitizeAuthUser(r.author) }));
+    }),
+    media: publicProcedure.input(z.object({ postId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select().from(postMedia).where(eq(postMedia.postId, input.postId)).orderBy(asc(postMedia.sortOrder));
+    }),
+  }),
+  reels: router({
+    list: publicProcedure.query(async () => await db.getReels()),
+    mine: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select().from(reelSubmissions).where(eq(reelSubmissions.userId, ctx.user.id)).orderBy(desc(reelSubmissions.createdAt));
+    }),
+    submit: protectedProcedure.input(z.object({ mediaUrl: z.string(), thumbnailUrl: z.string().optional(), caption: z.string().optional(), width: z.number(), height: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(reelSubmissions).values({ userId: ctx.user.id, ...input });
+    }),
+    approved: publicProcedure.input(z.object({ cursor: z.number().nullish(), limit: z.number().min(1).max(50).default(10) })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return { items: [], nextCursor: null };
+      const items = await database.select({ reel: reelSubmissions, user: users }).from(reelSubmissions).innerJoin(users, eq(reelSubmissions.userId, users.id)).where(and(eq(reelSubmissions.status, "approved"), input.cursor ? lt(reelSubmissions.id, input.cursor) : undefined)).orderBy(desc(reelSubmissions.id)).limit(input.limit + 1);
+      let nextCursor: typeof input.cursor = null;
+      if (items.length > input.limit) {
+        const nextItem = items.pop();
+        nextCursor = nextItem!.reel.id;
+      }
+      return { items, nextCursor };
+    }),
+    comment: protectedProcedure.input(z.object({ reelId: z.number(), content: z.string().min(1), parentId: z.number().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(reelComments).values({ userId: ctx.user.id, ...input });
+    }),
+    comments: publicProcedure.input(z.object({ reelId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select({ comment: reelComments, user: users }).from(reelComments).innerJoin(users, eq(reelComments.userId, users.id)).where(eq(reelComments.reelId, input.reelId)).orderBy(desc(reelComments.createdAt));
+    }),
+    toggleLike: protectedProcedure.input(z.object({ reelId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const existing = (await database.select().from(reelLikes).where(and(eq(reelLikes.reelId, input.reelId), eq(reelLikes.userId, ctx.user.id))).limit(1))[0];
+      if (existing) {
+        await database.delete(reelLikes).where(eq(reelLikes.id, existing.id));
+        return { liked: false };
+      }
+      await database.insert(reelLikes).values({ reelId: input.reelId, userId: ctx.user.id });
+      return { liked: true };
+    }),
+    toggleBookmark: protectedProcedure.input(z.object({ reelId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const existing = (await database.select().from(reelBookmarks).where(and(eq(reelBookmarks.reelId, input.reelId), eq(reelBookmarks.userId, ctx.user.id))).limit(1))[0];
+      if (existing) {
+        await database.delete(reelBookmarks).where(eq(reelBookmarks.id, existing.id));
+        return { bookmarked: false };
+      }
+      await database.insert(reelBookmarks).values({ reelId: input.reelId, userId: ctx.user.id });
+      return { bookmarked: true };
+    }),
+    recordView: publicProcedure.input(z.object({ reelId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(reelViews).values({ reelId: input.reelId, userId: ctx.user?.id });
+    }),
+    saved: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const bookmarks = await database.select({ reelId: reelBookmarks.reelId }).from(reelBookmarks).where(eq(reelBookmarks.userId, ctx.user.id));
+      if (!bookmarks.length) return [];
+      return await database.select({ reel: reelSubmissions, user: users }).from(reelSubmissions).innerJoin(users, eq(reelSubmissions.userId, users.id)).where(inArray(reelSubmissions.id, bookmarks.map(b => b.reelId)));
     }),
   }),
   discovery: router({
-    feed: publicProcedure.input(z.object({ limit: z.number().optional(), offset: z.number().optional() }).optional()).query(({ input }) => db.getFeedPosts(input?.limit ?? 20, input?.offset ?? 0)),
-    explore: publicProcedure.query(() => db.getExplorePosts(30)),
-    stories: publicProcedure.query(() => db.getStories()),
-    creators: publicProcedure.query(() => db.getCreatorDirectory()),
-    search: publicProcedure.input(z.object({ query: z.string().min(1) })).query(({ input }) => db.getSearchResults(input.query)),
-    ownerFollowers: protectedProcedure.query(({ ctx }) => db.getPrivateOwnerFollowers(ctx.user.id)),
-    addOwnerFollower: protectedProcedure.input(z.object({ followerName: z.string().min(1), followerHandle: z.string().min(1), avatarUrl: z.string().optional() })).mutation(({ ctx, input }) => db.addPrivateOwnerFollower(ctx.user.id, input.followerName, input.followerHandle, input.avatarUrl)),
-    removeOwnerFollower: protectedProcedure.input(z.object({ id: z.number() })).mutation(({ input }) => db.removePrivateOwnerFollower(input.id)),
+    feed: publicProcedure.input(z.object({ limit: z.number().optional(), offset: z.number().optional() }).optional()).query(async () => await db.getPosts()),
+    explore: publicProcedure.query(async () => await db.getPosts()),
+    search: publicProcedure.input(z.object({ query: z.string() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return { users: [], posts: [] };
+      const matchedUsers = await database.select().from(users).where(or(like(users.username, `%${input.query}%`), like(users.name, `%${input.query}%`))).limit(10);
+      return { users: matchedUsers.map(sanitizeAuthUser), posts: [] };
+    }),
   }),
-  profile: router({
-    byId: publicProcedure.input(z.object({ userId: z.number() })).query(({ input }) => db.getProfileById(input.userId)),
-    update: protectedProcedure.input(z.object({ name: z.string().optional(), username: z.string().optional(), bio: z.string().optional(), avatarUrl: z.string().nullable().optional(), subscriptionPrice: z.string().optional() })).mutation(({ ctx, input }) => db.updateUserProfile(ctx.user.id, input)),
-    applyForBadge: protectedProcedure.input(z.object({ requestedBadge: z.enum(["blue", "black"]), reason: z.string().max(1000).optional() })).mutation(({ ctx, input }) => db.applyForBadge(ctx.user.id, input.requestedBadge, input.reason)),
-    myBadgeApplications: protectedProcedure.query(({ ctx }) => db.getUserBadgeApplications(ctx.user.id)),
+  appeals: router({
+    create: protectedProcedure.input(z.object({ targetType: z.enum(["account", "post", "video", "reel"]), targetId: z.number(), reason: z.string().min(10) })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(contentAppeals).values({ appellantId: ctx.user.id, ...input });
+      return { message: "Appeal submitted successfully" };
+    }),
+    mine: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select().from(contentAppeals).where(eq(contentAppeals.appellantId, ctx.user.id)).orderBy(desc(contentAppeals.createdAt));
+    }),
   }),
-  posts: router({
-    create: protectedProcedure.input(z.object({ caption: z.string().optional(), mediaUrl: z.string().min(1), mediaType: z.enum(["image", "video"]), mediaUrls: z.array(z.string().min(1)).max(10).optional(), location: z.string().optional(), feeling: z.string().optional(), taggedUsers: z.string().optional(), isPremium: z.boolean().default(false) })).mutation(async ({ ctx, input }) => { await validateMediaUpload(input.mediaType === "image" ? "image/jpeg" : "video/mp4", undefined, "post", ctx.user.id); return db.createPost({ caption: input.caption, mediaUrl: input.mediaUrl, mediaType: input.mediaType, isPremium: input.isPremium, userId: ctx.user.id }, { mediaUrls: input.mediaUrls, location: input.location, feeling: input.feeling, taggedUsers: input.taggedUsers }); }),
-    like: protectedProcedure.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => { const post = await db.getPostById(input.postId); const result = await db.togglePostLike(input.postId, ctx.user.id); if (result.liked && post && post.userId !== ctx.user.id) await db.createNotification({ userId: post.userId, actorId: ctx.user.id, type: "like", targetId: input.postId, content: "liked your post" }); return result; }),
-    reaction: protectedProcedure.input(z.object({ postId: z.number(), reactionType: z.enum(["like", "love", "haha", "wow", "sad", "angry"]) })).mutation(async ({ ctx, input }) => { const post = await db.getPostById(input.postId); const result = await db.toggleReaction(input.postId, ctx.user.id, input.reactionType); if (result.reactionType && post && post.userId !== ctx.user.id) await db.createNotification({ userId: post.userId, actorId: ctx.user.id, type: "like", targetId: input.postId, content: `reacted ${input.reactionType} to your post` }); return result; }),
-    reactions: publicProcedure.input(z.object({ postId: z.number() })).query(({ input }) => db.getPostReactions(input.postId)),
-    media: publicProcedure.input(z.object({ postId: z.number() })).query(({ input }) => db.getPostMedia(input.postId)),
-    save: protectedProcedure.input(z.object({ postId: z.number() })).mutation(({ ctx, input }) => db.togglePostSave(input.postId, ctx.user.id)),
-    comment: protectedProcedure.input(z.object({ postId: z.number(), content: z.string().min(1).max(500) })).mutation(async ({ ctx, input }) => { const post = await db.getPostById(input.postId); const id = await db.createComment(input.postId, ctx.user.id, input.content); if (post && post.userId !== ctx.user.id) await db.createNotification({ userId: post.userId, actorId: ctx.user.id, type: "comment", targetId: input.postId, content: "commented on your post" }); return id; }),
-    comments: publicProcedure.input(z.object({ postId: z.number() })).query(({ input }) => db.getComments(input.postId)),
-    likeState: protectedProcedure.input(z.object({ postId: z.number() })).query(({ ctx, input }) => db.getLikeSaveState(input.postId, ctx.user.id)),
+  media: router({
+    policy: publicProcedure.query(async () => await db.getMediaUploadPolicy()),
+    prepareUpload: protectedProcedure.input(z.object({ fileName: z.string(), contentType: z.string(), purpose: z.enum(["profile", "post", "story", "reel"]) })).mutation(async ({ ctx, input }) => {
+      const key = `uploads/${ctx.user.id}/${Date.now()}_${input.fileName}`;
+      const { url, uploadUrl } = await storagePresignPut(key, input.contentType);
+      return { url, uploadUrl, key, fields: {} };
+    }),
+    uploadBase64: protectedProcedure.input(z.object({ base64Data: z.string(), purpose: z.enum(["profile", "post", "story", "reel"]), contentType: z.string().optional(), fileName: z.string().optional() })).mutation(async ({ ctx, input }) => {
+      const policy = await db.getMediaUploadPolicy();
+      if (input.purpose === "profile" && !policy.profilePhotosEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Profile photo uploads are disabled" });
+      if (input.purpose === "post" && !policy.photosEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Photo uploads are disabled" });
+      const buffer = Buffer.from(input.base64Data.split(",")[1], "base64");
+      const key = `uploads/${ctx.user.id}/${Date.now()}_${input.fileName || "file"}.${input.contentType?.split("/")[1] || "jpg"}`;
+      const { url } = await storagePut(key, buffer, input.contentType);
+      return { url };
+    }),
   }),
   follows: router({
-    toggle: protectedProcedure.input(z.object({ userId: z.number() })).mutation(async ({ ctx, input }) => { const result = await db.toggleFollow(ctx.user.id, input.userId); if (result.following && input.userId !== ctx.user.id) await db.createNotification({ userId: input.userId, actorId: ctx.user.id, type: "follow", content: result.isFollowBack ? "followed you back" : "started following you" }); if (result.requestPending && input.userId !== ctx.user.id) await db.createNotification({ userId: input.userId, actorId: ctx.user.id, type: "follow", content: "requested to follow you" }); return result; }),
-    state: protectedProcedure.input(z.object({ userId: z.number() })).query(({ ctx, input }) => db.getFollowState(ctx.user.id, input.userId)),
-    requestState: protectedProcedure.input(z.object({ userId: z.number() })).query(({ ctx, input }) => db.getFollowRequestState(ctx.user.id, input.userId)),
-    followers: protectedProcedure.input(z.object({ userId: z.number() })).query(({ ctx, input }) => db.getFollowers(input.userId, ctx.user.id)),
-    following: publicProcedure.input(z.object({ userId: z.number() })).query(({ ctx, input }) => db.getFollowing(input.userId, ctx.user?.id)),
-    incomingRequests: protectedProcedure.query(({ ctx }) => db.getIncomingFollowRequests(ctx.user.id)),
-    privacy: protectedProcedure.query(async ({ ctx }) => { const database = await db.getDb(); if (!database) return { isPrivate: false, showFollowersList: true, showFollowingList: true }; const row = (await database.select({ user: users, settings: userSettings }).from(users).leftJoin(userSettings, eq(userSettings.userId, users.id)).where(eq(users.id, ctx.user.id)).limit(1))[0]; return { isPrivate: Boolean(row?.settings?.isPrivate), showFollowersList: row?.user?.showFollowersList !== false, showFollowingList: row?.user?.showFollowingList !== false }; }),
-    reviewRequest: protectedProcedure.input(z.object({ requestId: z.number().int().positive(), status: z.enum(["approved", "rejected"]) })).mutation(async ({ ctx, input }) => { const result = await db.reviewFollowRequest(ctx.user.id, input.requestId, input.status); if (input.status === "approved" && "requesterId" in result && result.requesterId) await db.createNotification({ userId: result.requesterId, actorId: ctx.user.id, type: "follow", content: "approved your follow request" }); return result; }),
-    updatePrivacy: protectedProcedure.input(z.object({ showFollowersList: z.boolean().optional(), showFollowingList: z.boolean().optional(), isPrivate: z.boolean().optional() })).mutation(async ({ ctx, input }) => {
+    toggle: protectedProcedure.input(z.object({ followingId: z.number() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
-      if (!database) return;
-      const existing = (await database.select().from(userSettings).where(eq(userSettings.userId, ctx.user.id)).limit(1))[0];
-      if (existing) await database.update(userSettings).set({ ...(input.isPrivate !== undefined ? { isPrivate: input.isPrivate } : {}) }).where(eq(userSettings.userId, ctx.user.id));
-      else await database.insert(userSettings).values({ userId: ctx.user.id, isPrivate: input.isPrivate ?? false });
-      await database.update(users).set({ ...(input.showFollowersList !== undefined ? { showFollowersList: input.showFollowersList } : {}), ...(input.showFollowingList !== undefined ? { showFollowingList: input.showFollowingList } : {}) }).where(eq(users.id, ctx.user.id));
-      return { success: true };
-    }),
-  }),
-  stories: router({
-    list: publicProcedure.query(() => db.getActiveStories()),
-    create: protectedProcedure.input(z.object({ mediaUrl: z.string().min(1), mediaType: z.enum(["image", "video"]) })).mutation(async ({ ctx, input }) => { const permissions = await db.getUserMediaPermissions(ctx.user.id); if (!permissions.storiesEnabled) throw new TRPCError({ code: "FORBIDDEN", message: "Story posting is currently disabled for this account" }); await validateMediaUpload(input.mediaType === "image" ? "image/jpeg" : "video/mp4", undefined, "post", ctx.user.id); return db.addStory(ctx.user.id, input.mediaUrl, input.mediaType); }),
-    view: protectedProcedure.input(z.object({ storyId: z.number() })).mutation(({ ctx, input }) => db.recordStoryView(input.storyId, ctx.user.id)),
-    viewers: protectedProcedure.input(z.object({ storyId: z.number() })).query(async ({ input }) => ({ count: await db.getStoryViewCount(input.storyId), viewers: await db.getStoryViewers(input.storyId) })),
-    removeExpired: ownerOnly.mutation(() => db.deleteExpiredStories()),
-  }),
-  messages: router({
-    peers: protectedProcedure.input(z.object({ peerId: z.number().optional() }).optional()).query(({ ctx, input }) => db.getMessagePeers(ctx.user.id, input?.peerId)),
-    requests: protectedProcedure.query(({ ctx }) => db.getMessageRequests(ctx.user.id)),
-    list: protectedProcedure.input(z.object({ otherUserId: z.number() })).query(({ ctx, input }) => db.getMessages(ctx.user.id, input.otherUserId)),
-    send: protectedProcedure.input(z.object({ receiverId: z.number(), content: z.string().min(1).max(2000), replyToId: z.number().optional(), audioUrl: z.string().min(1).optional() })).mutation(async ({ ctx, input }) => { const id = await db.sendMessage(ctx.user.id, input.receiverId, input.content, input.replyToId, input.audioUrl); await db.createNotification({ userId: input.receiverId, actorId: ctx.user.id, type: "message", content: "sent you a message" }); return id; }),
-    read: protectedProcedure.input(z.object({ otherUserId: z.number() })).mutation(({ ctx, input }) => db.markConversationRead(ctx.user.id, input.otherUserId)),
-    react: protectedProcedure.input(z.object({ messageId: z.number(), emoji: z.string().min(1).max(8) })).mutation(({ ctx, input }) => db.toggleMessageReaction(input.messageId, ctx.user.id, input.emoji)),
-    delete: protectedProcedure.input(z.object({ messageId: z.number(), everyone: z.boolean() })).mutation(({ ctx, input }) => db.deleteMessage(input.messageId, ctx.user.id, input.everyone)),
-    calls: protectedProcedure.input(z.object({ otherUserId: z.number() })).query(({ ctx, input }) => db.getCallHistory(ctx.user.id, input.otherUserId)),
-    recentCalls: protectedProcedure.query(({ ctx }) => db.getRecentCallHistory(ctx.user.id)),
-    incomingCalls: protectedProcedure.query(({ ctx }) => db.getPendingIncomingCalls(ctx.user.id)),
-    settingsGet: protectedProcedure.input(z.object({ peerId: z.number() })).query(({ ctx, input }) => db.getConversationSettings(ctx.user.id, input.peerId)),
-    settingsUpdate: protectedProcedure.input(z.object({ peerId: z.number(), isPinned: z.boolean().optional(), isArchived: z.boolean().optional(), isMuted: z.boolean().optional(), themeColor: z.string().optional(), nickname: z.string().trim().max(80).nullable().optional() })).mutation(({ ctx, input }) => db.updateConversationSettings(ctx.user.id, input.peerId, input)),
-    typingSet: protectedProcedure.input(z.object({ peerId: z.number(), groupId: z.number().optional() })).mutation(({ ctx, input }) => db.setTypingStatus(ctx.user.id, input.peerId, input.groupId)),
-    typingGet: protectedProcedure.input(z.object({ peerId: z.number(), groupId: z.number().optional() })).query(({ input }) => db.getTypingStatus(input.peerId, input.groupId)),
-    forward: protectedProcedure.input(z.object({ messageIds: z.array(z.number()), receiverIds: z.array(z.number()) })).mutation(async ({ ctx, input }) => {
-      for (const receiverId of input.receiverIds) {
-        for (const msgId of input.messageIds) {
-          // fetch message
-          const database = await db.getDb();
-          if (!database) continue;
-          const msg = (await database.select().from(messages).where(eq(messages.id, msgId)).limit(1))[0];
-          if (msg) {
-            await db.sendMessage(ctx.user.id, receiverId, `Forwarded: ${msg.content}`, undefined, msg.audioUrl || undefined);
-          }
-        }
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const existing = (await database.select().from(follows).where(and(eq(follows.followerId, ctx.user.id), eq(follows.followingId, input.followingId))).limit(1))[0];
+      if (existing) {
+        await database.delete(follows).where(eq(follows.id, existing.id));
+        return { following: false, requestPending: false };
       }
-      return { success: true };
+      await database.insert(follows).values({ followerId: ctx.user.id, followingId: input.followingId });
+      return { following: true, requestPending: false };
     }),
-    getCall: protectedProcedure.input(z.object({ callId: z.number() })).query(({ input }) => db.getCall(input.callId)),
-    startCall: protectedProcedure.input(z.object({ receiverId: z.number(), callType: z.enum(["audio", "video"]) })).mutation(async ({ ctx, input }) => { try { const id = await db.createCall(ctx.user.id, input.receiverId, input.callType); await db.createNotification({ userId: input.receiverId, actorId: ctx.user.id, type: "message", content: `incoming ${input.callType} call` }); const caller = await db.getUserById(ctx.user.id); const tokens = await db.getUserPushTokens(input.receiverId); if (id) void sendIncomingCallPush(tokens, { callId: Number(id), callerName: caller?.name || "A TanRyuGram member", callType: input.callType }).catch(() => undefined); return id; } catch (error: any) { throw new TRPCError({ code: "CONFLICT", message: error?.message || "User is on another call" }); } }),
-    signal: protectedProcedure.input(z.object({ callId: z.number(), signalData: z.string().min(1), status: z.enum(["pending", "accepted"]).optional() })).mutation(({ input }) => db.updateCallSignal(input.callId, input.signalData, input.status)),
-    updateCall: protectedProcedure.input(z.object({ callId: z.number(), status: z.enum(["accepted", "declined", "missed", "ended"]), durationSeconds: z.number().optional() })).mutation(({ input }) => db.updateCall(input.callId, input.status, input.durationSeconds ?? 0)),
-    groups: protectedProcedure.query(({ ctx }) => db.getGroupsForUser(ctx.user.id)),
-    createGroup: protectedProcedure.input(z.object({ name: z.string().trim().min(1).max(80), avatarUrl: z.string().optional(), description: z.string().max(2000).optional(), visibility: z.enum(["public", "private"]).default("private"), joinMode: z.enum(["open", "approval", "invite"]).default("invite"), postingMode: z.enum(["all", "admins"]).default("all"), memberIds: z.array(z.number().int().positive()).max(99).default([]) })).mutation(({ ctx, input }) => db.createGroup(ctx.user.id, input.name, input.avatarUrl, input.memberIds, { description: input.description, visibility: input.visibility, joinMode: input.joinMode, postingMode: input.postingMode })),
-    addGroupMember: protectedProcedure.input(z.object({ groupId: z.number().positive(), userId: z.number().positive() })).mutation(async ({ ctx, input }) => { try { return await db.addGroupMember(input.groupId, ctx.user.id, input.userId); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not add member" }); } }),
-    requestGroupInvite: protectedProcedure.input(z.object({ groupId: z.number().positive(), userId: z.number().positive() })).mutation(async ({ ctx, input }) => { try { return await db.requestGroupInvite(input.groupId, ctx.user.id, input.userId); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not request member invite" }); } }),
-    inviteRequests: protectedProcedure.input(z.object({ groupId: z.number().positive() })).query(async ({ ctx, input }) => { try { return await db.getGroupInviteRequests(input.groupId, ctx.user.id); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not view invite requests" }); } }),
-    reviewInviteRequest: protectedProcedure.input(z.object({ requestId: z.number().positive(), approved: z.boolean() })).mutation(async ({ ctx, input }) => { try { return await db.reviewGroupInviteRequest(input.requestId, ctx.user.id, input.approved); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not review invite request" }); } }),
-    removeGroupMember: protectedProcedure.input(z.object({ groupId: z.number().positive(), userId: z.number().positive() })).mutation(async ({ ctx, input }) => { try { return await db.removeGroupMember(input.groupId, ctx.user.id, input.userId); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not remove member" }); } }),
-    leaveGroup: protectedProcedure.input(z.object({ groupId: z.number().positive() })).mutation(({ ctx, input }) => db.leaveGroup(input.groupId, ctx.user.id)),
-    discoverGroups: protectedProcedure.input(z.object({ query: z.string().optional() }).optional()).query(({ input }) => db.getPublicGroups(input?.query ?? "")),
-    updateGroupProfile: protectedProcedure.input(z.object({ groupId: z.number().positive(), name: z.string().trim().min(1).max(128).optional(), description: z.string().max(2000).optional(), avatarUrl: z.string().optional(), visibility: z.enum(["public", "private"]).optional(), joinMode: z.enum(["open", "approval", "invite"]).optional(), postingMode: z.enum(["all", "admins"]).optional() })).mutation(async ({ ctx, input }) => { const { groupId, ...changes } = input; try { return await db.updateGroupProfile(groupId, ctx.user.id, changes); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not update group" }); } }),
-    joinGroup: protectedProcedure.input(z.object({ groupId: z.number().positive() })).mutation(({ ctx, input }) => db.requestToJoinGroup(input.groupId, ctx.user.id)),
-    joinRequests: protectedProcedure.input(z.object({ groupId: z.number().positive() })).query(async ({ ctx, input }) => { try { return await db.getGroupJoinRequests(input.groupId, ctx.user.id); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not view join requests" }); } }),
-    reviewJoinRequest: protectedProcedure.input(z.object({ requestId: z.number().positive(), approved: z.boolean() })).mutation(async ({ ctx, input }) => { try { return await db.reviewGroupJoinRequest(input.requestId, ctx.user.id, input.approved); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not review join request" }); } }),
-    setGroupMemberRole: protectedProcedure.input(z.object({ groupId: z.number().positive(), userId: z.number().positive(), role: z.enum(["admin", "moderator", "member"]) })).mutation(async ({ ctx, input }) => { try { return await db.setGroupMemberRole(input.groupId, ctx.user.id, input.userId, input.role); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not update member role" }); } }),
-    pinGroupMessage: protectedProcedure.input(z.object({ groupId: z.number().positive(), messageId: z.number().positive().nullable() })).mutation(async ({ ctx, input }) => { try { return await db.pinGroupMessage(input.groupId, ctx.user.id, input.messageId); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not pin message" }); } }),
-    deleteGroupMessage: protectedProcedure.input(z.object({ groupId: z.number().positive(), messageId: z.number().positive() })).mutation(async ({ ctx, input }) => { try { return await db.deleteGroupMessage(input.groupId, ctx.user.id, input.messageId); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not delete group message" }); } }),
-    createPoll: protectedProcedure.input(z.object({ groupId: z.number().positive(), question: z.string().trim().min(1).max(500), options: z.array(z.string().trim().min(1).max(280)).min(2).max(10), allowsMultiple: z.boolean().default(false), closesAt: z.date().optional() })).mutation(async ({ ctx, input }) => { try { return await db.createGroupPoll(input.groupId, ctx.user.id, input.question, input.options, input.allowsMultiple, input.closesAt); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not create poll" }); } }),
-    poll: protectedProcedure.input(z.object({ pollId: z.number().positive() })).query(({ ctx, input }) => db.getGroupPoll(input.pollId, ctx.user.id)),
-    votePoll: protectedProcedure.input(z.object({ pollId: z.number().positive(), optionId: z.number().positive() })).mutation(async ({ ctx, input }) => { try { return await db.voteGroupPoll(input.pollId, ctx.user.id, input.optionId); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not vote" }); } }),
-    createEvent: protectedProcedure.input(z.object({ groupId: z.number().positive(), name: z.string().trim().min(1).max(180), description: z.string().max(2000).optional(), location: z.string().max(280).optional(), imageUrl: z.string().optional(), startsAt: z.date() })).mutation(async ({ ctx, input }) => { const { groupId, ...event } = input; try { return await db.createGroupEvent(groupId, ctx.user.id, event); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not create event" }); } }),
-    events: protectedProcedure.input(z.object({ groupId: z.number().positive() })).query(async ({ ctx, input }) => { try { return await db.listGroupEvents(input.groupId, ctx.user.id); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not view group events" }); } }),
-    rsvpEvent: protectedProcedure.input(z.object({ eventId: z.number().positive(), status: z.enum(["going", "maybe", "cant_go"]) })).mutation(async ({ ctx, input }) => { try { return await db.respondToGroupEvent(input.eventId, ctx.user.id, input.status); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not update RSVP" }); } }),
-    groupMedia: protectedProcedure.input(z.object({ groupId: z.number().positive(), query: z.string().optional() })).query(async ({ ctx, input }) => { try { return await db.getGroupMedia(input.groupId, input.query ?? "", ctx.user.id); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not view group media" }); } }),
-    groupMembers: protectedProcedure.input(z.object({ groupId: z.number().positive() })).query(async ({ ctx, input }) => { try { return await db.getGroupMembers(input.groupId, ctx.user.id); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not view group members" }); } }),
-    groupMessages: protectedProcedure.input(z.object({ groupId: z.number().positive() })).query(async ({ ctx, input }) => { try { return await db.getGroupMessages(input.groupId, ctx.user.id); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not view group messages" }); } }),
-    sendGroupMessage: protectedProcedure.input(z.object({ groupId: z.number(), content: z.string().min(1).max(4000), mediaUrl: z.string().optional(), attachmentType: z.enum(["image", "video", "audio", "file", "link"]).optional(), attachmentName: z.string().max(255).optional(), attachmentMimeType: z.string().max(160).optional(), attachmentSizeBytes: z.number().int().nonnegative().max(GROUP_ATTACHMENT_MAX_BYTES).optional(), attachmentDurationSeconds: z.number().int().nonnegative().max(7200).optional() })).mutation(async ({ ctx, input }) => { try { return await db.sendGroupMessage(input.groupId, ctx.user.id, input.content, { mediaUrl: input.mediaUrl, attachmentType: input.attachmentType, attachmentName: input.attachmentName, attachmentMimeType: input.attachmentMimeType, attachmentSizeBytes: input.attachmentSizeBytes, attachmentDurationSeconds: input.attachmentDurationSeconds }); } catch (error: any) { throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "You are not a group member" }); } }),
-    uploadGroupAttachment: protectedProcedure.input(z.object({ groupId: z.number().positive(), fileName: z.string().min(1).max(255), base64Data: z.string().min(1).max(17 * 1024 * 1024), contentType: z.string().min(1).max(160) })).mutation(async ({ ctx, input }) => {
-      try {
-        await db.assertGroupCanPost(input.groupId, ctx.user.id);
-        const attachmentType = classifyGroupAttachment(input.contentType);
-        const base64 = input.base64Data.replace(/^data:.*;base64,/, "");
-        const buffer = Buffer.from(base64, "base64");
-        if (!buffer.length || buffer.length > GROUP_ATTACHMENT_MAX_BYTES) throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "Group attachments must be 12 MB or smaller" });
-        if (attachmentType === "image" || attachmentType === "video") await validateMediaUpload(input.contentType, buffer.length);
-        const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 160) || "attachment";
-        const stored = await storagePut(`groups/${input.groupId}/${ctx.user.id}/${Date.now()}-${safeName}`, buffer, input.contentType);
-        return { ...stored, attachmentType, attachmentName: input.fileName, attachmentMimeType: input.contentType, attachmentSizeBytes: buffer.length };
-      } catch (error: any) { if (error instanceof TRPCError) throw error; throw new TRPCError({ code: "FORBIDDEN", message: error?.message || "Could not upload group attachment" }); }
+    followers: publicProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select({ user: users }).from(follows).innerJoin(users, eq(follows.followerId, users.id)).where(eq(follows.followingId, input.userId));
     }),
-  }),
-  notifications: router({ list: protectedProcedure.query(({ ctx }) => db.getNotifications(ctx.user.id)), unreadCount: protectedProcedure.query(({ ctx }) => db.getUnreadNotificationCount(ctx.user.id)), markRead: protectedProcedure.input(z.object({ notificationId: z.number().optional() })).mutation(({ ctx, input }) => db.markNotificationRead(ctx.user.id, input.notificationId)), registerPushToken: protectedProcedure.input(z.object({ token: z.string().min(1).max(255) })).mutation(({ ctx, input }) => db.registerPushToken(ctx.user.id, input.token)) }),
-  media: router({
-    policy: publicProcedure.query(() => db.getMediaUploadPolicy()),
-    prepareUpload: protectedProcedure.input(z.object({ fileName: z.string().min(1).max(255), contentType: z.string().min(1), fileSizeBytes: z.number().int().positive().optional(), purpose: z.enum(["post", "profile", "reel"]).default("post") })).mutation(async ({ ctx, input }) => { await validateMediaUpload(input.contentType, input.fileSizeBytes, input.purpose, ctx.user.id); return storagePresignPut(`users/${ctx.user.id}/${cleanUploadFileName(input.fileName)}`, input.contentType); }),
-    uploadBase64: protectedProcedure.input(z.object({ fileName: z.string().min(1).max(255), base64Data: z.string().min(1), contentType: z.string().min(1), purpose: z.enum(["post", "profile", "reel"]).default("post") })).mutation(async ({ ctx, input }) => {
-      const base64 = input.base64Data.replace(/^data:.*;base64,/, "");
-      const buffer = Buffer.from(base64, "base64");
-      await validateMediaUpload(input.contentType, buffer.length, input.purpose, ctx.user.id);
-      if (!buffer.length) throw new TRPCError({ code: "BAD_REQUEST", message: "The selected file is empty or could not be decoded" });
-      return storagePut(`users/${ctx.user.id}/${cleanUploadFileName(input.fileName)}`, buffer, input.contentType);
+    following: publicProcedure.input(z.object({ userId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select({ user: users }).from(follows).innerJoin(users, eq(follows.followingId, users.id)).where(eq(follows.followerId, input.userId));
+    }),
+    privacy: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return { isPrivate: false, showFollowersList: true, showFollowingList: true };
+      const settings = (await database.select().from(userSettings).where(eq(userSettings.userId, ctx.user.id)).limit(1))[0];
+      return settings || { isPrivate: false, showFollowersList: true, showFollowingList: true };
+    }),
+    updatePrivacy: protectedProcedure.input(z.object({ isPrivate: z.boolean().optional(), showFollowersList: z.boolean().optional(), showFollowingList: z.boolean().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(userSettings).values({ userId: ctx.user.id, ...input }).onDuplicateKeyUpdate({ set: input });
     }),
   }),
   reports: router({
-    create: protectedProcedure.input(z.object({ targetType: z.enum(["account", "post", "video", "reel"]), targetId: z.number().int().positive(), reason: z.enum(["pornography", "child_abuse", "dangerous", "harassment", "spam", "other"]), details: z.string().trim().max(1000).optional() })).mutation(async ({ ctx, input }) => { if (input.targetType === "account" && input.targetId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot report your own account" }); const result = await db.submitContentReport(ctx.user.id, input); if (result.status === "rate_limited") throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "You have reached the report limit. Please try again later." }); return { ...result, message: result.status === "auto_hidden" ? "Thanks. The content was hidden while the owner reviews the report." : "Thanks. Your report was sent to the owner for review." }; }),
+    create: protectedProcedure.input(z.object({ targetType: z.enum(["account", "post", "video", "reel"]), targetId: z.number(), reason: z.enum(["pornography", "child_abuse", "dangerous", "harassment", "spam", "other"]), details: z.string().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(contentReports).values({ reporterId: ctx.user.id, ...input });
+      return { message: "Report submitted successfully" };
+    }),
   }),
-  reels: router({
-    approved: publicProcedure.input(z.object({ limit: z.number().int().min(1).max(12).default(6), cursor: z.number().int().positive().optional() }).optional()).query(({ input }) => db.getApprovedReels(input?.limit ?? 6, input?.cursor)),
-    mine: protectedProcedure.query(({ ctx }) => db.getMyReelSubmissions(ctx.user.id)),
-    submit: protectedProcedure.input(z.object({ mediaUrl: z.string().url().or(z.string().startsWith("/")), thumbnailUrl: z.string().url().or(z.string().startsWith("/")).optional(), caption: z.string().trim().max(500).optional(), width: z.number().int().positive().max(4320), height: z.number().int().positive().max(7680), durationSeconds: z.number().int().positive().max(180).optional() })).mutation(async ({ ctx, input }) => { const ratio = input.width / input.height; if (Math.abs(ratio - 9 / 16) > 0.03) throw new TRPCError({ code: "BAD_REQUEST", message: "Reels must use a 9:16 portrait aspect ratio" }); await validateMediaUpload("video/mp4", undefined, "reel", ctx.user.id); const result = await db.createReelSubmission(ctx.user.id, input); if (result.status === "disabled") throw new TRPCError({ code: "FORBIDDEN", message: "Reel posting is not enabled for this account" }); if (result.status === "invalid_ratio") throw new TRPCError({ code: "BAD_REQUEST", message: "Reels must use a 9:16 portrait aspect ratio" }); return { ...result, message: "Reel submitted for owner approval" }; }),
-    recordView: publicProcedure.input(z.object({ reelId: z.number().int().positive() })).mutation(({ ctx, input }) => db.recordReelView(input.reelId, ctx.user?.id)),
-    toggleLike: protectedProcedure.input(z.object({ reelId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleReelLike(input.reelId, ctx.user.id)),
-    toggleBookmark: protectedProcedure.input(z.object({ reelId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleReelBookmark(input.reelId, ctx.user.id)),
-    saved: protectedProcedure.query(({ ctx }) => db.getMySavedReels(ctx.user.id)),
-    comment: protectedProcedure.input(z.object({ reelId: z.number().int().positive(), content: z.string().trim().min(1).max(500), parentId: z.number().int().positive().optional() })).mutation(({ ctx, input }) => db.createReelComment(input.reelId, ctx.user.id, input.content, input.parentId)),
-    toggleCommentLike: protectedProcedure.input(z.object({ commentId: z.number().int().positive() })).mutation(({ ctx, input }) => db.toggleReelCommentLike(input.commentId, ctx.user.id)),
-    comments: publicProcedure.input(z.object({ reelId: z.number().int().positive() })).query(({ input }) => db.getReelComments(input.reelId)),
+  messages: router({
+    list: protectedProcedure.input(z.object({ otherUserId: z.number() }).optional()).query(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const cond = input?.otherUserId ? or(and(eq(messages.senderId, ctx.user.id), eq(messages.receiverId, input.otherUserId)), and(eq(messages.senderId, input.otherUserId), eq(messages.receiverId, ctx.user.id))) : or(eq(messages.senderId, ctx.user.id), eq(messages.receiverId, ctx.user.id));
+      return await database.select().from(messages).where(cond).orderBy(asc(messages.createdAt));
+    }),
+    calls: protectedProcedure.input(z.object({ otherUserId: z.number() }).optional()).query(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const cond = input?.otherUserId ? or(and(eq(calls.callerId, ctx.user.id), eq(calls.receiverId, input.otherUserId)), and(eq(calls.callerId, input.otherUserId), eq(calls.receiverId, ctx.user.id))) : or(eq(calls.callerId, ctx.user.id), eq(calls.receiverId, ctx.user.id));
+      return await database.select().from(calls).where(cond).orderBy(desc(calls.startedAt));
+    }),
+    peers: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const res = await database.select({ peer: users }).from(messages).innerJoin(users, or(and(eq(messages.senderId, ctx.user.id), eq(messages.receiverId, users.id)), and(eq(messages.receiverId, ctx.user.id), eq(messages.senderId, users.id)))).groupBy(users.id);
+      return res.map(r => sanitizeAuthUser(r.peer));
+    }),
+    createGroup: protectedProcedure.input(z.object({ name: z.string().min(1), description: z.string().optional(), avatarUrl: z.string().optional(), visibility: z.enum(["public", "private"]).optional(), joinMode: z.enum(["open", "approval", "invite"]).optional(), postingMode: z.enum(["all", "admins"]).optional(), memberIds: z.array(z.number()).optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [group] = await database.insert(groups).values({ name: input.name, creatorId: ctx.user.id, avatarUrl: input.avatarUrl, description: input.description, visibility: input.visibility || "private", joinMode: input.joinMode || "invite", postingMode: input.postingMode || "all" }).$returningId();
+      await database.insert(groupMembers).values({ groupId: group.id, userId: ctx.user.id, role: "admin" });
+      if (input.memberIds) {
+        for (const mid of input.memberIds) {
+          await database.insert(groupMembers).values({ groupId: group.id, userId: mid, role: "member" });
+        }
+      }
+      return group.id;
+    }),
+    joinGroup: protectedProcedure.input(z.object({ groupId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [group] = await database.select().from(groups).where(eq(groups.id, input.groupId));
+      if (!group) throw new TRPCError({ code: "NOT_FOUND" });
+      if (group.joinMode === "open") {
+        await database.insert(groupMembers).values({ groupId: input.groupId, userId: ctx.user.id, role: "member" });
+        return { status: "member" };
+      } else if (group.joinMode === "approval") {
+        await database.insert(groupJoinRequests).values({ groupId: input.groupId, userId: ctx.user.id, status: "pending" });
+        return { status: "pending" };
+      }
+      throw new TRPCError({ code: "FORBIDDEN", message: "Group is invite-only" });
+    }),
+    groups: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const res = await database.select({ group: groups }).from(groupMembers).innerJoin(groups, eq(groupMembers.groupId, groups.id)).where(eq(groupMembers.userId, ctx.user.id));
+      return res.map(r => r.group);
+    }),
+    requests: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select({ request: groupJoinRequests, group: groups, user: users }).from(groupJoinRequests).innerJoin(groups, eq(groupJoinRequests.groupId, groups.id)).innerJoin(users, eq(groupJoinRequests.userId, users.id)).where(eq(groups.creatorId, ctx.user.id));
+    }),
+    discoverGroups: protectedProcedure.query(async () => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select().from(groups).where(eq(groups.visibility, "public")).limit(20);
+    }),
+    groupInviteRequests: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select({ request: groupInviteRequests, group: groups, user: users }).from(groupInviteRequests).innerJoin(groups, eq(groupInviteRequests.groupId, groups.id)).innerJoin(users, eq(groupInviteRequests.inviteeId, users.id)).where(eq(groups.creatorId, ctx.user.id));
+    }),
+    inviteToGroup: protectedProcedure.input(z.object({ groupId: z.number(), userId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [membership] = await database.select().from(groupMembers).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)));
+      if (!membership) throw new TRPCError({ code: "FORBIDDEN" });
+      if (["admin", "moderator"].includes(membership.role)) {
+        await database.insert(groupMembers).values({ groupId: input.groupId, userId: input.userId, role: "member" });
+      } else {
+        await database.insert(groupInviteRequests).values({ groupId: input.groupId, inviteeId: input.userId, inviterId: ctx.user.id, status: "pending" });
+      }
+    }),
+    handleInviteRequest: protectedProcedure.input(z.object({ requestId: z.number(), status: z.enum(["approved", "rejected"]) })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [request] = await database.select().from(groupInviteRequests).where(eq(groupInviteRequests.id, input.requestId));
+      if (!request) throw new TRPCError({ code: "NOT_FOUND" });
+      const [membership] = await database.select().from(groupMembers).where(and(eq(groupMembers.groupId, request.groupId), eq(groupMembers.userId, ctx.user.id)));
+      if (!membership || !["admin", "moderator"].includes(membership.role)) throw new TRPCError({ code: "FORBIDDEN" });
+      if (input.status === "approved") {
+        await database.insert(groupMembers).values({ groupId: request.groupId, userId: request.inviteeId, role: "member" });
+      }
+      await database.delete(groupInviteRequests).where(eq(groupInviteRequests.id, input.requestId));
+    }),
+    approveJoinRequest: protectedProcedure.input(z.object({ requestId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [request] = await database.select().from(groupJoinRequests).where(eq(groupJoinRequests.id, input.requestId));
+      if (!request) throw new TRPCError({ code: "NOT_FOUND" });
+      const [membership] = await database.select().from(groupMembers).where(and(eq(groupMembers.groupId, request.groupId), eq(groupMembers.userId, ctx.user.id)));
+      if (!membership || !["admin", "moderator"].includes(membership.role)) throw new TRPCError({ code: "FORBIDDEN" });
+      await database.insert(groupMembers).values({ groupId: request.groupId, userId: request.userId, role: "member" });
+      await database.delete(groupJoinRequests).where(eq(groupJoinRequests.id, input.requestId));
+    }),
+    rejectJoinRequest: protectedProcedure.input(z.object({ requestId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [request] = await database.select().from(groupJoinRequests).where(eq(groupJoinRequests.id, input.requestId));
+      if (!request) throw new TRPCError({ code: "NOT_FOUND" });
+      const [membership] = await database.select().from(groupMembers).where(and(eq(groupMembers.groupId, request.groupId), eq(groupMembers.userId, ctx.user.id)));
+      if (!membership || !["admin", "moderator"].includes(membership.role)) throw new TRPCError({ code: "FORBIDDEN" });
+      await database.delete(groupJoinRequests).where(eq(groupJoinRequests.id, input.requestId));
+    }),
+    send: protectedProcedure.input(z.object({ receiverId: z.number(), content: z.string().min(1), audioUrl: z.string().optional(), replyToId: z.number().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(messages).values({ senderId: ctx.user.id, ...input });
+    }),
+    react: protectedProcedure.input(z.object({ messageId: z.number(), emoji: z.string() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(messageReactions).values({ messageId: input.messageId, userId: ctx.user.id, reaction: input.emoji }).onDuplicateKeyUpdate({ set: { reaction: input.emoji } });
+    }),
+    delete: protectedProcedure.input(z.object({ messageId: z.number().optional(), messageIds: z.array(z.number()).optional(), everyone: z.boolean().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.messageIds) {
+        await database.delete(messages).where(and(inArray(messages.id, input.messageIds), eq(messages.senderId, ctx.user.id)));
+      } else if (input.messageId) {
+        await database.delete(messages).where(and(eq(messages.id, input.messageId), eq(messages.senderId, ctx.user.id)));
+      }
+    }),
+    read: protectedProcedure.input(z.object({ otherUserId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(messages).set({ isRead: true }).where(and(eq(messages.senderId, input.otherUserId), eq(messages.receiverId, ctx.user.id)));
+    }),
+    forward: protectedProcedure.input(z.object({ messageId: z.number().optional(), messageIds: z.array(z.number()).optional(), receiverId: z.number().optional(), receiverIds: z.array(z.number()).optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const targetIds = input.receiverIds || (input.receiverId ? [input.receiverId] : []);
+      const sourceIds = input.messageIds || (input.messageId ? [input.messageId] : []);
+      for (const rid of targetIds) {
+        for (const mid of sourceIds) {
+          const [msg] = await database.select().from(messages).where(eq(messages.id, mid));
+          if (msg) await database.insert(messages).values({ senderId: ctx.user.id, receiverId: rid, content: msg.content, attachmentUrl: msg.attachmentUrl, attachmentType: msg.attachmentType });
+        }
+      }
+    }),
+    typingGet: protectedProcedure.input(z.object({ peerId: z.number(), groupId: z.number().optional() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const [status] = await database.select().from(typingStatus).where(and(eq(typingStatus.userId, input.peerId), input.groupId ? eq(typingStatus.groupId, input.groupId) : isNull(typingStatus.groupId))).orderBy(desc(typingStatus.updatedAt)).limit(1);
+      if (!status) return [];
+      const isTyping = Date.now() - status.updatedAt.getTime() < 5000;
+      return isTyping ? [{ userId: status.userId }] : [];
+    }),
+    settingsGet: protectedProcedure.input(z.object({ peerId: z.number() })).query(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) return null;
+      const [settings] = await database.select().from(conversationSettings).where(and(eq(conversationSettings.userId, ctx.user.id), eq(conversationSettings.peerId, input.peerId)));
+      return settings || null;
+    }),
+    startCall: protectedProcedure.input(z.object({ receiverId: z.number(), callType: z.enum(["audio", "video"]) })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [call] = await database.insert(calls).values({ callerId: ctx.user.id, receiverId: input.receiverId, callType: input.callType, status: "pending", roomId: `call_${Date.now()}_${ctx.user.id}` }).$returningId();
+      return call.id;
+    }),
+    sendGroupMessage: protectedProcedure.input(z.object({ groupId: z.number(), content: z.string().min(1), mediaUrl: z.string().optional(), attachmentType: z.enum(["image", "video", "file", "link"]).optional(), attachmentName: z.string().optional(), attachmentMimeType: z.string().optional(), attachmentSizeBytes: z.number().optional(), attachmentDurationSeconds: z.number().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(groupMessages).values({ groupId: input.groupId, senderId: ctx.user.id, content: input.content, attachmentUrl: input.mediaUrl, attachmentType: input.attachmentType as any });
+    }),
+    uploadGroupAttachment: protectedProcedure.input(z.object({ groupId: z.number(), fileName: z.string(), contentType: z.string(), base64Data: z.string() })).mutation(async ({ ctx, input }) => {
+      const buffer = Buffer.from(input.base64Data.split(",")[1], "base64");
+      const key = `groups/${input.groupId}/${Date.now()}_${input.fileName}`;
+      const { url } = await storagePut(key, buffer, input.contentType);
+      const attachmentType = input.contentType.startsWith("image/") ? "image" : input.contentType.startsWith("video/") ? "video" : "file";
+      return { url, attachmentUrl: url, attachmentName: input.fileName, attachmentMimeType: input.contentType, attachmentSizeBytes: buffer.length, attachmentType };
+    }),
+    groupMedia: publicProcedure.input(z.object({ groupId: z.number(), query: z.string().optional() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      let cond = and(eq(groupMessages.groupId, input.groupId), isNotNull(groupMessages.attachmentUrl));
+      if (input.query) {
+        cond = and(cond, or(like(groupMessages.content, `%${input.query}%`), like(groupMessages.attachmentName, `%${input.query}%`)));
+      }
+      return await database.select({ message: groupMessages, sender: users }).from(groupMessages).innerJoin(users, eq(groupMessages.senderId, users.id)).where(cond).orderBy(desc(groupMessages.createdAt));
+    }),
+    events: publicProcedure.input(z.object({ groupId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select().from(groupEvents).where(eq(groupEvents.groupId, input.groupId)).orderBy(asc(groupEvents.startsAt));
+    }),
+    groupMessages: protectedProcedure.input(z.object({ groupId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select({ message: groupMessages, sender: users }).from(groupMessages).innerJoin(users, eq(groupMessages.senderId, users.id)).where(eq(groupMessages.groupId, input.groupId)).orderBy(asc(groupMessages.createdAt));
+    }),
+    groupMembers: protectedProcedure.input(z.object({ groupId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select({ member: groupMembers, user: users }).from(groupMembers).innerJoin(users, eq(groupMembers.userId, users.id)).where(eq(groupMembers.groupId, input.groupId));
+    }),
+    rsvpEvent: protectedProcedure.input(z.object({ eventId: z.number(), status: z.enum(["going", "maybe", "declined"]) })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(groupEventRsvps).values({ eventId: input.eventId, userId: ctx.user.id, status: input.status }).onDuplicateKeyUpdate({ set: { status: input.status } });
+    }),
+    votePoll: protectedProcedure.input(z.object({ pollId: z.number(), optionId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(groupPollVotes).values({ pollId: input.pollId, optionId: input.optionId, userId: ctx.user.id });
+    }),
+    poll: publicProcedure.input(z.object({ pollId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return null;
+      const [row] = await database.select().from(groupPolls).where(eq(groupPolls.id, input.pollId));
+      if (!row) return null;
+      const options = await database.select().from(groupPollOptions).where(eq(groupPollOptions.pollId, input.pollId));
+      const votes = await database.select().from(groupPollVotes).where(eq(groupPollVotes.pollId, input.pollId));
+      return { poll: { ...row, allowsMultiple: row.isMultipleChoice, closesAt: row.expiresAt }, options, votes, totalVotes: votes.length };
+    }),
+    createEvent: protectedProcedure.input(z.object({ groupId: z.number(), name: z.string(), description: z.string().optional(), location: z.string().optional(), startsAt: z.date() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(groupEvents).values({ groupId: input.groupId, creatorId: ctx.user.id, title: input.name, description: input.description, location: input.location, startsAt: input.startsAt });
+    }),
+    createPoll: protectedProcedure.input(z.object({ groupId: z.number(), question: z.string(), options: z.array(z.string()), allowsMultiple: z.boolean().optional(), closesAt: z.date().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [poll] = await database.insert(groupPolls).values({ groupId: input.groupId, creatorId: ctx.user.id, question: input.question, isMultipleChoice: input.allowsMultiple ?? false, expiresAt: input.closesAt }).$returningId();
+      for (const opt of input.options) {
+        await database.insert(groupPollOptions).values({ pollId: poll.id, optionText: opt });
+      }
+    }),
+    reviewJoinRequest: protectedProcedure.input(z.object({ requestId: z.number(), status: z.enum(["approved", "rejected"]) })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(groupJoinRequests).set({ status: input.status }).where(eq(groupJoinRequests.id, input.requestId));
+      if (input.status === "approved") {
+        const [req] = await database.select().from(groupJoinRequests).where(eq(groupJoinRequests.id, input.requestId));
+        if (req) await database.insert(groupMembers).values({ groupId: req.groupId, userId: req.userId, role: "member" });
+      }
+    }),
+    pinGroupMessage: protectedProcedure.input(z.object({ groupId: z.number(), messageId: z.number().nullable() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(groups).set({ pinnedMessageId: input.messageId }).where(eq(groups.id, input.groupId));
+    }),
+    deleteGroupMessage: protectedProcedure.input(z.object({ groupId: z.number(), messageId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.delete(groupMessages).where(and(eq(groupMessages.id, input.messageId), eq(groupMessages.groupId, input.groupId)));
+    }),
+    updateGroupProfile: protectedProcedure.input(z.object({ groupId: z.number(), name: z.string(), description: z.string().optional(), avatarUrl: z.string().optional(), visibility: z.enum(["public", "private"]).optional(), joinMode: z.enum(["open", "approval", "invite"]).optional(), postingMode: z.enum(["all", "admins"]).optional() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(groups).set(input).where(eq(groups.id, input.groupId));
+    }),
+    leaveGroup: protectedProcedure.input(z.object({ groupId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.delete(groupMembers).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, ctx.user.id)));
+    }),
+    setGroupMemberRole: protectedProcedure.input(z.object({ groupId: z.number(), userId: z.number(), role: z.enum(["admin", "moderator", "member"]) })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(groupMembers).set({ role: input.role }).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.userId)));
+    }),
+    removeGroupMember: protectedProcedure.input(z.object({ groupId: z.number(), userId: z.number() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.delete(groupMembers).where(and(eq(groupMembers.groupId, input.groupId), eq(groupMembers.userId, input.userId)));
+    }),
+    reviewInviteRequest: protectedProcedure.input(z.object({ requestId: z.number(), status: z.enum(["approved", "rejected"]) })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(groupInviteRequests).set({ status: input.status }).where(eq(groupInviteRequests.id, input.requestId));
+      if (input.status === "approved") {
+        const [req] = await database.select().from(groupInviteRequests).where(eq(groupInviteRequests.id, input.requestId));
+        if (req) await database.insert(groupMembers).values({ groupId: req.groupId, userId: req.inviteeId, role: "member" });
+      }
+    }),
+    addGroupMember: protectedProcedure.input(z.object({ groupId: z.number(), userId: z.number() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(groupMembers).values({ groupId: input.groupId, userId: input.userId, role: "member" });
+    }),
+    requestGroupInvite: protectedProcedure.input(z.object({ groupId: z.number(), userId: z.number() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(groupInviteRequests).values({ groupId: input.groupId, inviterId: ctx.user.id, inviteeId: input.userId, status: "pending" });
+      return { status: "pending" };
+    }),
+    inviteRequests: protectedProcedure.input(z.object({ groupId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select({ request: groupInviteRequests, inviter: users, invitee: users }).from(groupInviteRequests).innerJoin(users, eq(groupInviteRequests.inviterId, users.id)).innerJoin(users, eq(groupInviteRequests.inviteeId, users.id)).where(eq(groupInviteRequests.groupId, input.groupId));
+    }),
+    typingSet: protectedProcedure.input(z.object({ peerId: z.number(), groupId: z.number().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(typingStatus).values({ userId: ctx.user.id, peerId: input.peerId, groupId: input.groupId, updatedAt: new Date() }).onDuplicateKeyUpdate({ set: { updatedAt: new Date() } });
+    }),
+    joinRequests: protectedProcedure.input(z.object({ groupId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select({ request: groupJoinRequests, user: users }).from(groupJoinRequests).innerJoin(users, eq(groupJoinRequests.userId, users.id)).where(eq(groupJoinRequests.groupId, input.groupId));
+    }),
+    incomingCalls: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const res = await database.select({ call: calls, caller: users }).from(calls).innerJoin(users, eq(calls.callerId, users.id)).where(and(eq(calls.receiverId, ctx.user.id), eq(calls.status, "pending"))).orderBy(desc(calls.startedAt));
+      return res.map(r => ({ ...r, caller: sanitizeAuthUser(r.caller) }));
+    }),
+    recentCalls: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select().from(calls).where(or(eq(calls.callerId, ctx.user.id), eq(calls.receiverId, ctx.user.id))).orderBy(desc(calls.startedAt)).limit(20);
+    }),
+    updateCall: protectedProcedure.input(z.object({ callId: z.number(), status: z.enum(["accepted", "declined", "missed", "ended"]), durationSeconds: z.number().optional() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(calls).set({ status: input.status, endedAt: input.status === "ended" ? new Date() : undefined, durationSeconds: input.durationSeconds }).where(eq(calls.id, input.callId));
+    }),
+    settingsUpdate: protectedProcedure.input(z.object({ peerId: z.number(), isPinned: z.boolean().optional(), isArchived: z.boolean().optional(), isMuted: z.boolean().optional(), themeColor: z.string().optional(), nickname: z.string().nullable().optional() })).mutation(async ({ ctx, input }) => {
+      const { peerId, ...settings } = input;
+      await db.updateConversationSettings(ctx.user.id, peerId, settings);
+    }),
+    getCall: protectedProcedure.input(z.object({ callId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [call] = await database.select().from(calls).where(eq(calls.id, input.callId));
+      return call || null;
+    }),
+    signal: protectedProcedure.input(z.object({ callId: z.number(), signalData: z.string() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(calls).set({ signalData: input.signalData }).where(eq(calls.id, input.callId));
+    }),
   }),
-  appeals: router({
-    mine: protectedProcedure.query(({ ctx }) => db.getMyContentAppeals(ctx.user.id)),
-    create: protectedProcedure.input(z.object({ targetType: z.enum(["account", "post", "video", "reel"]), targetId: z.number().int().positive(), reason: z.string().trim().min(10).max(1500) })).mutation(async ({ ctx, input }) => { const result = await db.createContentAppeal(ctx.user.id, input); return { ...result, message: "Your appeal was sent to the owner for review." }; }),
+  stories: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const res = await database.select({ story: messages, owner: users }).from(messages).innerJoin(users, eq(messages.senderId, users.id)).where(and(eq(messages.receiverId, 0), eq(messages.senderId, ctx.user.id))).orderBy(desc(messages.createdAt));
+      return res.map(r => ({ ...r, owner: sanitizeAuthUser(r.owner) }));
+    }),
+    viewers: protectedProcedure.input(z.object({ storyId: z.number() })).query(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) return { count: 0, viewers: [] };
+      return { count: 0, viewers: [] };
+    }),
+    view: protectedProcedure.input(z.object({ storyId: z.number() })).mutation(async ({ ctx, input }) => {
+      return { success: true };
+    }),
+    create: protectedProcedure.input(z.object({ mediaUrl: z.string(), caption: z.string().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [inserted] = await database.insert(messages).values({ senderId: ctx.user.id, receiverId: 0, content: input.caption || "", attachmentUrl: input.mediaUrl, attachmentType: "image" });
+      return inserted.insertId;
+    }),
   }),
-  payments: router({
-    // Payments completely removed for 200-user beta
-    tips: protectedProcedure.query(() => []),
+  notifications: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return [];
+      const res = await database.select({ notification: notifications, actor: users }).from(notifications).innerJoin(users, eq(notifications.actorId, users.id)).where(eq(notifications.userId, ctx.user.id)).orderBy(desc(notifications.createdAt)).limit(50);
+      return res.map(r => ({ ...r, actor: sanitizeAuthUser(r.actor) }));
+    }),
+    unreadCount: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return 0;
+      const [res] = await database.select({ count: count() }).from(notifications).where(and(eq(notifications.userId, ctx.user.id), eq(notifications.isRead, false)));
+      return res.count;
+    }),
+    markAsRead: protectedProcedure.input(z.object({ notificationId: z.number() })).mutation(async ({ input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.update(notifications).set({ isRead: true }).where(eq(notifications.id, input.notificationId));
+    }),
+    markRead: protectedProcedure.input(z.object({ notificationId: z.number().optional() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.notificationId) {
+        await database.update(notifications).set({ isRead: true }).where(eq(notifications.id, input.notificationId));
+      } else {
+        await database.update(notifications).set({ isRead: true }).where(eq(notifications.userId, ctx.user.id));
+      }
+    }),
+    registerPushToken: protectedProcedure.input(z.object({ token: z.string() })).mutation(async ({ ctx, input }) => {
+      const database = await db.getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await database.insert(pushTokens).values({ userId: ctx.user.id, token: input.token }).onDuplicateKeyUpdate({ set: { token: input.token } });
+    }),
   }),
-  admin: router({ overview: ownerOnly.query(() => db.getAdminMetrics()), geminiChat: ownerOnly.input(z.object({ messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(4000) })).min(1).max(20) })).mutation(async ({ input }) => { try { const [emailSettings, uploadPolicy] = await Promise.all([db.getEmailDeliverySettings(), db.getMediaUploadPolicy()]); return { reply: await generateGeminiChatReply(input.messages, { emailDeliveryEnabled: emailSettings.emailDeliveryEnabled, signupVerificationEnabled: emailSettings.signupVerificationEnabled, appScriptLoginEnabled: emailSettings.appScriptLoginEnabled, appScriptResetEnabled: emailSettings.appScriptResetEnabled, photosEnabled: uploadPolicy.photosEnabled, videosEnabled: uploadPolicy.videosEnabled }) }; } catch (error: any) { throw new TRPCError({ code: "BAD_GATEWAY", message: error?.message || "Gemini chat is unavailable" }); } }), geminiProposal: ownerOnly.input(z.object({ request: z.string().trim().min(3).max(1200) })).mutation(async ({ input }) => { try { const [emailSettings, uploadPolicy] = await Promise.all([db.getEmailDeliverySettings(), db.getMediaUploadPolicy()]); return await generateGeminiFeatureProposal(input.request, { emailDeliveryEnabled: emailSettings.emailDeliveryEnabled, signupVerificationEnabled: emailSettings.signupVerificationEnabled, appScriptLoginEnabled: emailSettings.appScriptLoginEnabled, appScriptResetEnabled: emailSettings.appScriptResetEnabled, photosEnabled: uploadPolicy.photosEnabled, videosEnabled: uploadPolicy.videosEnabled }); } catch (error: any) { throw new TRPCError({ code: "BAD_GATEWAY", message: error?.message || "Gemini could not create a proposal" }); } }), geminiApplySafeActions: ownerOnly.input(z.object({ actions: z.array(z.enum(["enable_signup_verification", "disable_signup_verification", "enable_email_delivery", "disable_email_delivery", "enable_appscript_login", "disable_appscript_login", "enable_appscript_reset", "disable_appscript_reset", "enable_photo_uploads", "disable_photo_uploads", "enable_video_uploads", "disable_video_uploads"])).max(8) })).mutation(async ({ ctx, input }) => { try { const [emailSettings, uploadPolicy] = await Promise.all([db.getEmailDeliverySettings(), db.getMediaUploadPolicy()]); const current = { emailDeliveryEnabled: emailSettings.emailDeliveryEnabled, signupVerificationEnabled: emailSettings.signupVerificationEnabled, appScriptLoginEnabled: emailSettings.appScriptLoginEnabled, appScriptResetEnabled: emailSettings.appScriptResetEnabled, photosEnabled: uploadPolicy.photosEnabled, videosEnabled: uploadPolicy.videosEnabled }; const next = applySafeGeminiActions(input.actions, current); await Promise.all([db.updateEmailDeliverySettings(ctx.user.id, { emailDeliveryEnabled: next.emailDeliveryEnabled, signupVerificationEnabled: next.signupVerificationEnabled, appScriptLoginEnabled: next.appScriptLoginEnabled, appScriptResetEnabled: next.appScriptResetEnabled }), db.updateMediaUploadPolicy(ctx.user.id, { photosEnabled: next.photosEnabled, videosEnabled: next.videosEnabled })]); return { applied: input.actions, settings: next }; } catch (error: any) { throw new TRPCError({ code: "BAD_REQUEST", message: error?.message || "Safe Gemini actions could not be applied" }); } }), migrationExport: ownerOnly.mutation(async () => buildUserMigrationArchive()), migrationInspect: ownerOnly.input(z.object({ archiveJson: z.string().min(2).max(USER_MIGRATION_MAX_BYTES) })).mutation(async ({ input }) => { try { return await inspectUserMigrationArchive(JSON.parse(input.archiveJson)); } catch (error: any) { throw new TRPCError({ code: "BAD_REQUEST", message: error?.message || "Invalid migration archive" }); } }), migrationImport: ownerOnly.input(z.object({ archiveJson: z.string().min(2).max(USER_MIGRATION_MAX_BYTES), confirm: z.literal(true) })).mutation(async ({ input }) => { try { return await importUserMigrationArchive(JSON.parse(input.archiveJson)); } catch (error: any) { throw new TRPCError({ code: "BAD_REQUEST", message: error?.message || "Could not import migration archive" }); } }), users: ownerOnly.query(() => db.getAllUsers()), posts: ownerOnly.query(() => db.getAllPosts()), badgeApplications: ownerOnly.query(() => db.getAllBadgeApplications()), mediaPermissions: ownerOnly.query(() => db.getAllUserMediaPermissions()), reports: ownerOnly.query(() => db.getContentReports()), reels: ownerOnly.query(() => db.getReelSubmissions()), appeals: ownerOnly.query(() => db.getContentAppeals()),     auditLog: ownerOnly.query(() => db.getModerationAuditLog()),
-    reelsPromotions: ownerOnly.query(() => db.getReelPromotions()),
-    reelsAnalytics: ownerOnly.input(z.object({ reelIds: z.array(z.number().int().positive()).max(100) })).query(({ input }) => db.getReelEngagementAnalytics(input.reelIds)),
-    reelTrends: ownerOnly.input(z.object({ reelId: z.number().int().positive() })).query(({ input }) => db.getReelSevenDayTrends(input.reelId)),
-    setReelPromotion: ownerOnly.input(z.object({ reelId: z.number().int().positive(), priority: z.number().int().min(1).max(10), status: z.enum(["active", "paused", "ended"]), endsAt: z.date().nullable().optional() })).mutation(({ ctx, input }) => db.setReelPromotion(ctx.user.id, input)),
-    reviewReel: ownerOnly.input(z.object({ reelId: z.number().int().positive(), status: z.enum(["approved", "rejected"]), reviewNote: z.string().trim().max(1000).optional() })).mutation(({ ctx, input }) => db.reviewReel(input.reelId, ctx.user.id, input.status, input.reviewNote)), reviewAppeal: ownerOnly.input(z.object({ appealId: z.number().int().positive(), status: z.enum(["approved", "rejected"]), response: z.string().trim().max(1000).optional() })).mutation(({ ctx, input }) => db.reviewContentAppeal(input.appealId, ctx.user.id, input.status, input.response)), setUserMediaPermissions: ownerOnly.input(z.object({ userId: z.number().int().positive(), postsEnabled: z.boolean().optional(), photosEnabled: z.boolean().optional(), videosEnabled: z.boolean().optional(), reelsEnabled: z.boolean().optional(), storiesEnabled: z.boolean().optional() })).mutation(({ ctx, input }) => { const { userId, ...permissions } = input; return db.updateUserMediaPermissions(ctx.user.id, userId, permissions); }), reviewReport: ownerOnly.input(z.object({ reportId: z.number().int().positive(), status: z.enum(["reviewed", "dismissed"]) })).mutation(({ ctx, input }) => db.reviewContentReport(input.reportId, ctx.user.id, input.status)), uploadPolicy: ownerOnly.query(() => db.getMediaUploadPolicy()), setUploadPolicy: ownerOnly.input(z.object({ photosEnabled: z.boolean(), profilePhotosEnabled: z.boolean(), videosEnabled: z.boolean() })).mutation(({ ctx, input }) => db.updateMediaUploadPolicy(ctx.user.id, input)), emailSettings: ownerOnly.query(() => db.getEmailDeliverySettings()), setEmailSettings: ownerOnly.input(z.object({ emailDeliveryEnabled: z.boolean(), signupVerificationEnabled: z.boolean(), appScriptLoginEnabled: z.boolean(), appScriptResetEnabled: z.boolean() })).mutation(({ ctx, input }) => db.updateEmailDeliverySettings(ctx.user.id, input)), recoverySettings: ownerOnly.query(() => db.getRecoverySupportSettings()), setRecoverySettings: ownerOnly.input(z.object({ guestRecoveryEnabled: z.boolean(), whatsappSupportEnabled: z.boolean(), whatsappSupportNumber: z.string().min(7).max(32) })).mutation(({ ctx, input }) => db.updateRecoverySupportSettings(ctx.user.id, { ...input, whatsappSupportNumber: normalizeWhatsAppNumber(input.whatsappSupportNumber) })), recoveryInbox: ownerOnly.query(() => db.getRecoverySupportInbox()), replyRecovery: ownerOnly.input(z.object({ requestId: z.number().int().positive(), body: z.string().trim().min(1).max(1000) })).mutation(({ input }) => db.addRecoverySupportMessage(input.requestId, "owner", input.body.trim())), closeRecovery: ownerOnly.input(z.object({ requestId: z.number().int().positive() })).mutation(({ input }) => db.closeRecoverySupportRequest(input.requestId)), verifyUser: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.verifyUser(input.userId, input.value)), setBadge: ownerOnly.input(z.object({ userId: z.number(), badgeType: z.enum(["none", "blue", "black"]) })).mutation(({ input }: { input: { userId: number; badgeType: "none" | "blue" | "black" } }) => db.setUserBadge(input.userId, input.badgeType)),     setCreator: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.setUserCreator(input.userId, input.value)),
-    setBadgeLabel: ownerOnly.input(z.object({ userId: z.number(), label: z.string().min(1).max(32) })).mutation(({ input }) => db.setBadgeLabel(input.userId, input.label)),
-    setShowBadge: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }) => db.setShowBadge(input.userId, input.value)), setDisplayedFollowers: ownerOnly.input(z.object({ userId: z.number(), count: z.number().int().min(0).nullable() })).mutation(({ input }: { input: { userId: number; count: number | null } }) => db.setDisplayedFollowersCount(input.userId, input.count)), reviewBadge: ownerOnly.input(z.object({ applicationId: z.number(), status: z.enum(["approved", "rejected"]) })).mutation(({ ctx, input }) => db.reviewBadgeApplication(input.applicationId, ctx.user.id, input.status)), banUser: ownerOnly.input(z.object({ userId: z.number(), value: z.boolean() })).mutation(({ input }: { input: { userId: number; value: boolean } }) => db.banUser(input.userId, input.value)), setRole: ownerOnly.input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) })).mutation(({ input }: { input: { userId: number; role: "user" | "admin" } }) => db.setUserRole(input.userId, input.role)), deletePost: protectedProcedure.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => { const result = await db.deletePostAsUser(input.postId, ctx.user.id, ctx.user.role === "admin" || isTanryugramOwner(ctx.user)); if (result.reason === "forbidden") throw new TRPCError({ code: "FORBIDDEN", message: "You can only delete your own posts" }); if (result.reason === "not_found") throw new TRPCError({ code: "NOT_FOUND", message: "Post not found" }); return result; }) }),
 });
 
 export type AppRouter = typeof appRouter;

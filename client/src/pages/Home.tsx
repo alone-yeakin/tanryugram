@@ -476,8 +476,8 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
   const savedReelsQuery = trpc.reels.saved.useQuery(undefined, { enabled: isOwnProfile && activeTab === "saved" });
   const followersQuery = trpc.follows.followers.useQuery({ userId: targetUserId }, { enabled: targetUserId > 0 && activeListModal === "followers" });
   const followingQuery = trpc.follows.following.useQuery({ userId: targetUserId }, { enabled: targetUserId > 0 && activeListModal === "following" });
-  const followStateQuery = trpc.follows.state.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && !isOwnProfile && targetUserId > 0 });
-  const followRequestQuery = trpc.follows.requestState.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && !isOwnProfile && targetUserId > 0 });
+  const followStateQuery = (trpc.follows as any).state.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && !isOwnProfile && targetUserId > 0 });
+  const followRequestQuery = (trpc.follows as any).requestState.useQuery({ userId: targetUserId }, { enabled: isAuthenticated && !isOwnProfile && targetUserId > 0 });
   const toggleFollowMutation = trpc.follows.toggle.useMutation();
   const isFollowing = Boolean(followStateQuery.data);
   const requestPending = Boolean(followRequestQuery.data);
@@ -492,16 +492,16 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
       return;
     }
     if (targetUserId <= 0 || toggleFollowMutation.isPending) return;
-    toggleFollowMutation.mutate({ userId: targetUserId }, {
+    toggleFollowMutation.mutate({ followingId: targetUserId }, {
       onSuccess: (result) => {
         followStateQuery.refetch();
-        utils.profile.byId.invalidate({ userId: targetUserId });
+        (utils.profile as any).byId.invalidate({ username: handle });
         utils.follows.followers.invalidate({ userId: targetUserId });
         utils.follows.following.invalidate({ userId: targetUserId });
         followRequestQuery.refetch();
         toast.success(result.requestPending ? `Follow request sent to @${handle}` : result.following ? `You are now following @${handle}` : `You unfollowed @${handle}`);
       },
-      onError: (error) => toast.error(error.message),
+      onError: (error: any) => toast.error(error.message),
     });
   };
 
@@ -510,11 +510,11 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
       deletePostMutation.mutate({ postId }, {
         onSuccess: () => {
           toast.success("Post deleted successfully");
-          utils.profile.byId.invalidate();
-          utils.discovery.feed.invalidate();
-          utils.discovery.explore.invalidate();
+          (utils.profile as any).byId.invalidate();
+          (utils.discovery as any).feed.invalidate();
+          (utils.discovery as any).explore.invalidate();
         },
-        onError: (err) => toast.error(err.message),
+        onError: (err: any) => toast.error(err.message),
       });
     }
   };

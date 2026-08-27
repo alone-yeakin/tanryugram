@@ -70,7 +70,7 @@ export async function generateGeminiChatReply(messages: Array<{ role: "user" | "
   return text;
 }
 
-export function applySafeGeminiActions(actions: GeminiFeatureProposal["safeActions"], current: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean; photosEnabled: boolean; videosEnabled: boolean }) {
+export function applySafeGeminiActions(actions: GeminiFeatureProposal["safeActions"], current: { emailDeliveryEnabled: boolean; signupVerificationEnabled: boolean; appScriptLoginEnabled: boolean; appScriptResetEnabled: boolean; photosEnabled: boolean; profilePhotosEnabled: boolean; videosEnabled: boolean }) {
   const next = { ...current };
   for (const action of actions) {
     if (action === "enable_signup_verification") next.signupVerificationEnabled = true;
@@ -81,8 +81,14 @@ export function applySafeGeminiActions(actions: GeminiFeatureProposal["safeActio
     if (action === "disable_appscript_login") next.appScriptLoginEnabled = false;
     if (action === "enable_appscript_reset") next.appScriptResetEnabled = true;
     if (action === "disable_appscript_reset") next.appScriptResetEnabled = false;
-    if (action === "enable_photo_uploads") next.photosEnabled = true;
-    if (action === "disable_photo_uploads") next.photosEnabled = false;
+    if (action === "enable_photo_uploads") {
+      next.photosEnabled = true;
+      next.profilePhotosEnabled = true;
+    }
+    if (action === "disable_photo_uploads") {
+      next.photosEnabled = false;
+      next.profilePhotosEnabled = false;
+    }
     if (action === "enable_video_uploads") next.videosEnabled = true;
     if (action === "disable_video_uploads") next.videosEnabled = false;
   }

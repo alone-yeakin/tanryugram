@@ -57,9 +57,19 @@ async function registerForPushNotificationsAsync() {
       { identifier: "answer", buttonTitle: "Answer", options: { opensAppToForeground: true } },
       { identifier: "decline", buttonTitle: "Decline", options: { isDestructive: true } },
     ]).catch(() => undefined);
-    for (const ringtone of ["default", "soft", "bright"] as RingtoneId[]) {
+    
+    await Notifications.setNotificationChannelAsync("calls_default", {
+      name: "TanRyuGram incoming calls",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 300, 200, 300, 200, 300],
+      sound: "default",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      enableVibrate: true,
+    });
+    for (const ringtone of ["soft", "bright"] as RingtoneId[]) {
       await Notifications.setNotificationChannelAsync(ringtoneChannel(ringtone), {
-        name: `TanRyuGram ${ringtone === "default" ? "system" : ringtone} calls`,
+        name: `TanRyuGram ${ringtone} calls`,
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 300, 200, 300, 200, 300],
         sound: ringtoneSound(ringtone),
@@ -137,11 +147,22 @@ export default function App() {
     void Notifications.getLastNotificationResponseAsync().then((response) => {
       if (mounted && response) dispatchNativeCall(response.notification.request.content.data as Record<string, unknown>);
     }).catch(() => undefined);
+
+    const handleDeepLink = (event: { url: string }) => {
+      if (event.url.includes("tanryugram://call") || event.url.includes("TANRYUGRAM_CALL")) {
+        // Handled via notification listeners
+      }
+    };
+    const linkSubscription = Linking.addEventListener("url", handleDeepLink);
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
     return () => {
       mounted = false;
       void registration;
       receivedSubscription.remove();
       responseSubscription.remove();
+      linkSubscription.remove();
     };
   }, []);
 
@@ -194,7 +215,6 @@ export default function App() {
     if (!incomingCall) return;
     const payload = JSON.stringify({ event: "incoming_call_response", route: "call", callId: incomingCall.callId, status: "declined" });
     webViewRef.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('tanryugram-native-call-response',{detail:${payload}})); true;`);
-    webViewRef.current?.postMessage(JSON.stringify({ type: "decline-incoming-call", ...incomingCall }));
     setIncomingCall(null);
   }, [incomingCall]);
 
@@ -224,12 +244,12 @@ export default function App() {
           sound: ringtoneSound(selectedRingtone),
           categoryIdentifier: "incoming_call",
           data: { event: "incoming_call", route: "call", callId: message.callId, callType: message.callType || "audio", callerName: message.callerName || "A TanRyuGram member", fullScreen: "true" },
-          ...(Device.osName === "Android" ? { channelId: ringtoneChannel(selectedRingtone) } : {}),
+          ...(Platform.OS === "android" ? { channelId: ringtoneChannel(selectedRingtone) } : {}),
         } as any,
         trigger: null,
       });
     } catch {
-      // Ignore ordinary WebView messages and malformed page messages.
+      // Ignore ordinary WebView messages
     }
   }, []);
 
@@ -248,67 +268,76 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f7fb" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       {hasError ? (
         <ErrorView message={errorMessage} onRetry={retry} />
       ) : (
         <View style={styles.webviewShell}>
-        <View style={styles.sessionBar}><View style={styles.sessionDot} /><Text style={styles.sessionLabel}>Tanryugram mobile</Text><Text style={styles.sessionStatus}>{sessionStatus}</Text></View>
-        <WebView
-          key={reloadKey}
-          ref={webViewRef}
-          source={{ uri: APP_URL }}
-          style={styles.webview}
-          originWhitelist={["https://*"]}
-          javaScriptEnabled
-          domStorageEnabled
-          cacheEnabled
-          cacheMode="LOAD_DEFAULT"
-          thirdPartyCookiesEnabled
-          sharedCookiesEnabled
-          javaScriptCanOpenWindowsAutomatically
-          setSupportMultipleWindows={false}
-          mixedContentMode="never"
-          allowsFullscreenVideo
-          mediaPlaybackRequiresUserAction={false}
-          allowsInlineMediaPlayback
-          geolocationEnabled
-          allowFileAccess
-          allowFileAccessFromFileURLs={false}
-          mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
-          pullToRefreshEnabled
-          startInLoadingState
-          renderLoading={() => <LoadingView />}
-          onNavigationStateChange={handleNavigation}
-          onLoadEnd={injectNativePushToken}
-          onMessage={handleWebMessage}
-          onShouldStartLoadWithRequest={handleExternalLink}
-          onError={handleError}
-          onHttpError={handleHttpError}
-          onContentProcessDidTerminate={retry}
-          onRenderProcessGone={retry}
-          textZoom={100}
-          setBuiltInZoomControls={false}
-          setDisplayZoomControls={false}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          automaticallyAdjustContentInsets={false}
-          applicationNameForUserAgent="Tanryugram/1.1"
-        />
-        {incomingCall ? (
-          <View style={styles.incomingCallCard} accessibilityViewIsModal>
-            <View style={styles.incomingCallGlow} />
-            <Text style={styles.incomingEyebrow}>Tanryugram · incoming {incomingCall.callType} call</Text>
-            <View style={styles.incomingAvatar}><Text style={styles.incomingAvatarText}>{incomingCall.callerName.slice(0, 1).toUpperCase()}</Text></View>
-            <Text style={styles.incomingName}>{incomingCall.callerName}</Text>
-            <Text style={styles.incomingHint}>Answer from the secure call room</Text>
-            <View style={styles.incomingActions}>
-              <Pressable onPress={dismissIncomingCall} style={({ pressed }) => [styles.declineButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel="Decline call"><Text style={styles.declineLabel}>Decline</Text></Pressable>
-              <Pressable onPress={openIncomingCall} style={({ pressed }) => [styles.answerButton, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel="Answer call"><Text style={styles.answerLabel}>Answer</Text></Pressable>
-            </View>
-            {Platform.OS === "android" ? <Text style={styles.lockScreenHint}>Push alerts are enabled for background and lock-screen delivery.</Text> : null}
+          <View style={styles.sessionBar}>
+            <View style={styles.sessionDot} />
+            <Text style={styles.sessionLabel}>Tanryugram mobile</Text>
+            <Text style={styles.sessionStatus}>{sessionStatus}</Text>
           </View>
-        ) : null}
+          <WebView
+            key={reloadKey}
+            ref={webViewRef}
+            source={{ uri: APP_URL }}
+            style={styles.webview}
+            originWhitelist={["https://*"]}
+            javaScriptEnabled
+            domStorageEnabled
+            cacheEnabled
+            cacheMode="LOAD_DEFAULT"
+            thirdPartyCookiesEnabled
+            sharedCookiesEnabled
+            javaScriptCanOpenWindowsAutomatically
+            setSupportMultipleWindows={false}
+            mixedContentMode="never"
+            allowsFullscreenVideo
+            mediaPlaybackRequiresUserAction={false}
+            allowsInlineMediaPlayback
+            geolocationEnabled
+            allowFileAccess
+            allowFileAccessFromFileURLs={false}
+            mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
+            pullToRefreshEnabled
+            startInLoadingState
+            renderLoading={() => <LoadingView />}
+            onNavigationStateChange={handleNavigation}
+            onLoadEnd={injectNativePushToken}
+            onMessage={handleWebMessage}
+            onShouldStartLoadWithRequest={handleExternalLink}
+            onError={handleError}
+            onHttpError={handleHttpError}
+            onContentProcessDidTerminate={retry}
+            onRenderProcessGone={retry}
+            textZoom={100}
+            setBuiltInZoomControls={false}
+            setDisplayZoomControls={false}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            automaticallyAdjustContentInsets={false}
+            applicationNameForUserAgent="Tanryugram/1.3"
+          />
+          {incomingCall && (
+            <View style={styles.incomingCallCard} accessibilityViewIsModal>
+              <View style={styles.incomingCallGlow} />
+              <Text style={styles.incomingEyebrow}>Tanryugram · incoming {incomingCall.callType} call</Text>
+              <View style={styles.incomingAvatar}>
+                <Text style={styles.incomingAvatarText}>{incomingCall.callerName.slice(0, 1).toUpperCase()}</Text>
+              </View>
+              <Text style={styles.incomingName}>{incomingCall.callerName}</Text>
+              <Text style={styles.incomingHint}>Answer from the secure call room</Text>
+              <View style={styles.incomingActions}>
+                <Pressable onPress={dismissIncomingCall} style={({ pressed }) => [styles.declineButton, pressed && styles.pressed]}>
+                  <Text style={styles.declineLabel}>Decline</Text>
+                </Pressable>
+                <Pressable onPress={openIncomingCall} style={({ pressed }) => [styles.answerButton, pressed && styles.pressed]}>
+                  <Text style={styles.answerLabel}>Answer</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
       )}
     </SafeAreaView>
@@ -318,135 +347,199 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f7fb",
+    backgroundColor: "#000000",
   },
   webviewShell: {
     flex: 1,
-    position: "relative",
+    backgroundColor: "#000000",
   },
   webview: {
     flex: 1,
-    backgroundColor: "#f8f7fb",
+    backgroundColor: "#000000",
   },
-  sessionBar: { height: 28, flexDirection: "row", alignItems: "center", paddingHorizontal: 13, backgroundColor: "#f8f7fb", gap: 6 },
-  sessionDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#22c55e" },
-  sessionLabel: { color: "#27222f", fontSize: 10, fontWeight: "800" },
-  sessionStatus: { marginLeft: "auto", color: "#817a8f", fontSize: 9 },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000000",
+    padding: 24,
+  },
+  loadingTitle: {
+    marginTop: 20,
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "#a1a1aa",
+    textAlign: "center",
+  },
+  sessionBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#09090b",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#18181b",
+  },
+  sessionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10b981",
+    marginRight: 8,
+  },
+  sessionLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#ffffff",
+    marginRight: 8,
+  },
+  sessionStatus: {
+    fontSize: 10,
+    color: "#71717a",
+    flex: 1,
+  },
+  errorCard: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: "#09090b",
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "#18181b",
+    alignItems: "center",
+  },
+  errorEyebrow: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#7c3aed",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#a1a1aa",
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: "#7c3aed",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    width: "100%",
+    alignItems: "center",
+  },
+  retryLabel: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
   incomingCallCard: {
     position: "absolute",
-    left: 16,
-    right: 16,
-    top: 18,
-    borderRadius: 28,
-    backgroundColor: "#16131f",
-    padding: 22,
+    top: 40,
+    left: 20,
+    right: 20,
+    backgroundColor: "#09090b",
+    borderRadius: 24,
+    padding: 24,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.28,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
+    borderWidth: 1,
+    borderColor: "#7c3aed44",
+    shadowColor: "#7c3aed",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
     elevation: 12,
   },
   incomingCallGlow: {
     position: "absolute",
-    top: -34,
-    width: 130,
-    height: 130,
-    borderRadius: 65,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
     backgroundColor: "#7c3aed",
-    opacity: 0.18,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   incomingEyebrow: {
-    color: "#c4b5fd",
     fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.3,
+    fontWeight: "700",
+    color: "#7c3aed",
     textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 20,
   },
   incomingAvatar: {
-    width: 72,
-    height: 72,
-    marginTop: 16,
-    borderRadius: 36,
-    alignItems: "center",
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#18181b",
     justifyContent: "center",
-    backgroundColor: "#8b5cf6",
-    borderWidth: 3,
-    borderColor: "#c4b5fd",
-  },
-  incomingAvatarText: { color: "#fff", fontSize: 28, fontWeight: "800" },
-  incomingName: { marginTop: 12, color: "#fff", fontSize: 20, fontWeight: "800" },
-  incomingHint: { marginTop: 5, color: "#aaa3b8", fontSize: 12 },
-  incomingActions: { width: "100%", flexDirection: "row", gap: 10, marginTop: 20 },
-  declineButton: { flex: 1, alignItems: "center", borderRadius: 15, backgroundColor: "#312331", paddingVertical: 13 },
-  answerButton: { flex: 1, alignItems: "center", borderRadius: 15, backgroundColor: "#22c55e", paddingVertical: 13 },
-  declineLabel: { color: "#fda4af", fontSize: 13, fontWeight: "800" },
-  answerLabel: { color: "#052e16", fontSize: 13, fontWeight: "800" },
-  lockScreenHint: { marginTop: 14, color: "#817a8f", fontSize: 10, textAlign: "center" },
-  centered: {
-    flex: 1,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f8f7fb",
-    paddingHorizontal: 24,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: "#7c3aed",
   },
-  loadingTitle: {
-    marginTop: 18,
-    color: "#17151d",
-    fontSize: 18,
+  incomingAvatarText: {
+    fontSize: 24,
     fontWeight: "700",
-  },
-  loadingText: {
-    marginTop: 8,
-    color: "#74717d",
-    fontSize: 13,
-    textAlign: "center",
-  },
-  errorCard: {
-    width: "100%",
-    maxWidth: 380,
-    borderRadius: 24,
-    backgroundColor: "#ffffff",
-    padding: 24,
-    shadowColor: "#17151d",
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
-  },
-  errorEyebrow: {
-    color: "#7c3aed",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-  errorTitle: {
-    marginTop: 8,
-    color: "#17151d",
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  errorText: {
-    marginTop: 10,
-    color: "#74717d",
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  retryButton: {
-    marginTop: 20,
-    alignItems: "center",
-    borderRadius: 14,
-    backgroundColor: "#17151d",
-    paddingVertical: 13,
-  },
-  retryLabel: {
     color: "#ffffff",
-    fontSize: 14,
+  },
+  incomingName: {
+    fontSize: 20,
     fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 4,
+  },
+  incomingHint: {
+    fontSize: 13,
+    color: "#71717a",
+    marginBottom: 24,
+  },
+  incomingActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  declineButton: {
+    flex: 1,
+    backgroundColor: "#18181b",
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  declineLabel: {
+    color: "#ef4444",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  answerButton: {
+    flex: 2,
+    backgroundColor: "#7c3aed",
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  answerLabel: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "600",
   },
   pressed: {
-    opacity: 0.78,
+    opacity: 0.8,
     transform: [{ scale: 0.98 }],
   },
 });

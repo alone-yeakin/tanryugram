@@ -43,9 +43,9 @@ export function StoryBarLive({ onOpen }: { onOpen: (story: any, allStories?: any
       setUploadProgress(25);
       const base64 = await dataUrl(file);
       setUploadProgress(50);
-      const uploaded = await upload.mutateAsync({ fileName: file.name, base64Data: base64, contentType: file.type || "image/jpeg" });
+      const uploaded = await (upload as any).mutateAsync({ fileName: file.name, base64Data: base64, contentType: file.type || "image/jpeg", purpose: "post" });
       setUploadProgress(80);
-      const created = await create.mutateAsync({ mediaUrl: uploaded.url, mediaType: "image" });
+      const created = await create.mutateAsync({ mediaUrl: uploaded.url });
       setUploadProgress(100);
       toast.success("Story posted", { description: "It will be visible for 24 hours." });
       storyQuery.refetch();
@@ -135,10 +135,10 @@ export function MultiImageComposer({ onClose }: { onClose: () => void }) {
       setPublishing(true);
       const urls: string[] = [];
       for (const file of files) {
-        const uploaded = await upload.mutateAsync({ fileName: file.name, base64Data: await dataUrl(file), contentType: file.type });
+        const uploaded = await (upload as any).mutateAsync({ fileName: file.name, base64Data: await dataUrl(file), contentType: file.type, purpose: "post" });
         urls.push(uploaded.url);
       }
-      await create.mutateAsync({ caption, mediaUrl: urls[0], mediaUrls: urls, mediaType: "image", location: location || undefined, feeling: feeling || undefined, taggedUsers: tags || undefined, isPremium: false });
+      await create.mutateAsync({ content: caption, location: location || undefined, mediaUrls: urls });
       toast.success("Post published", { description: `${urls.length} image${urls.length > 1 ? "s" : ""} shared with your community.` });
       onClose();
     } catch (error: any) { toast.error("Could not publish post", { description: error?.message || "Please try again." }); } finally { setPublishing(false); }
@@ -191,7 +191,7 @@ export function CallOverlay({ callId, callType, isCaller, peer, onClose, onCallA
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           await new Promise<void>((resolve) => { if (pc.iceGatheringState === "complete") resolve(); else { const handler = () => { if (pc.iceGatheringState === "complete") { pc.removeEventListener("icegatheringstatechange", handler); resolve(); } }; pc.addEventListener("icegatheringstatechange", handler); window.setTimeout(resolve, 4000); } });
-          await signal.mutateAsync({ callId, signalData: JSON.stringify({ kind: "offer", description: pc.localDescription }), status: "pending" });
+          await signal.mutateAsync({ callId, signalData: JSON.stringify({ kind: "offer", description: pc.localDescription }) });
         }
       } catch (error: any) {
         const message = error?.name === "NotFoundError" ? "No microphone or camera device is available. On an emulator, enable a virtual microphone or test on a physical phone." : error?.name === "NotAllowedError" ? "Allow TanRyuGram microphone and camera permissions in Android Settings, then try again." : error?.name === "NotReadableError" ? "Android could not start the microphone. Close other apps using the mic, enable the emulator microphone, and try again." : error?.name === "OverconstrainedError" ? "The selected camera or microphone mode is unavailable on this device. Try an audio call or restart the app." : error?.message || "Android could not start the audio source. Check microphone permission and that no other app is using the mic.";
@@ -215,7 +215,7 @@ export function CallOverlay({ callId, callType, isCaller, peer, onClose, onCallA
         if (!answer) return;
         await pcRef.current?.setLocalDescription(answer);
         await new Promise<void>((resolve) => { if (pcRef.current?.iceGatheringState === "complete") resolve(); else { const handler = () => { if (pcRef.current?.iceGatheringState === "complete") { pcRef.current.removeEventListener("icegatheringstatechange", handler); resolve(); } }; pcRef.current?.addEventListener("icegatheringstatechange", handler); window.setTimeout(resolve, 4000); } });
-        await signal.mutateAsync({ callId, signalData: JSON.stringify({ kind: "answer", description: pcRef.current?.localDescription }), status: "accepted" });
+        await signal.mutateAsync({ callId, signalData: JSON.stringify({ kind: "answer", description: pcRef.current?.localDescription }) });
       } else if (isCaller && data.kind === "answer") {
         await pcRef.current?.setRemoteDescription(data.description);
       }
@@ -279,7 +279,7 @@ export function AdvancedMessagesView() {
     const mediaRecorder = new MediaRecorder(stream);
     chunks.current = [];
     mediaRecorder.ondataavailable = (event) => chunks.current.push(event.data);
-    mediaRecorder.onstop = async () => { stream.getTracks().forEach((track) => track.stop()); const blob = new Blob(chunks.current, { type: "audio/webm" }); const audio = await upload.mutateAsync({ fileName: `voice-${Date.now()}.webm`, base64Data: await dataUrl(blob), contentType: "audio/webm" }); await send.mutateAsync({ receiverId: otherUserId, content: "Voice note", audioUrl: audio.url, replyToId: replyTo?.id }); setReplyTo(null); };
+    mediaRecorder.onstop = async () => { stream.getTracks().forEach((track) => track.stop()); const blob = new Blob(chunks.current, { type: "audio/webm" }); const audio = await (upload as any).mutateAsync({ fileName: `voice-${Date.now()}.webm`, base64Data: await dataUrl(blob), contentType: "audio/webm", purpose: "post" }); await send.mutateAsync({ receiverId: otherUserId, content: "Voice note", audioUrl: audio.url, replyToId: replyTo?.id }); setReplyTo(null); };
     recorder.current = mediaRecorder; mediaRecorder.start(); setRecording(true); setRecordingMs(0); setCancelRecording(false);
   };
   useEffect(() => { if (!recording) return; const timer = window.setInterval(() => setRecordingMs((value) => value + 100), 100); return () => window.clearInterval(timer); }, [recording]);
