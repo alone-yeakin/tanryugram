@@ -736,6 +736,20 @@
 - [x] Propagate remote hang-up state so both call screens close promptly
 - [x] Add regression coverage for audio setup and remote hang-up transitions
 - [x] Run TypeScript, focused tests, production build, and call UI verification
-- [ ] Save and publish the verified call repair checkpoint
-- [ ] Deliver the updated call repair and mobile retest guidance
+- [x] Save and publish the verified call repair checkpoint
+- [x] Deliver the updated call repair and mobile retest guidance
+
+
+## Call Controls, Alerts, Badge Assignment & APK Refresh (Current Session)
+
+- [x] Audit current active-call controls, chat call history, incoming alerts, badge admin UI, and Android source
+- [x] Add mute microphone and disable-video controls with reliable media-track state updates
+- [x] Add missed and completed call history entries inside direct chat
+- [x] Add ringing sound and stronger visual incoming-call notification behavior
+- [x] Add secure owner-only manual badge assignment for user accounts
+- [x] Add regression tests for the new call, badge, and alert contracts
+- [x] Run TypeScript, focused tests, production build, and responsive verification
+- [x] Build and verify a fresh Android debug APK from the latest source
+- [ ] Save and publish the updated web checkpoint
+- [ ] Deliver the updated checkpoint, APK, and mobile retest guidance
 
