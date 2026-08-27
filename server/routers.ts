@@ -795,7 +795,12 @@ export const appRouter = router({
     send: protectedProcedure.input(z.object({ receiverId: z.number(), content: z.string().min(1), audioUrl: z.string().optional(), replyToId: z.number().optional() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await database.insert(messages).values({ senderId: ctx.user.id, ...input });
+      const [res] = await database.insert(messages).values({ 
+        senderId: ctx.user.id, 
+        ...input,
+        deliveryStatus: "sent"
+      });
+      return { id: res.insertId };
     }),
     react: protectedProcedure.input(z.object({ messageId: z.number(), emoji: z.string() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
@@ -814,7 +819,7 @@ export const appRouter = router({
     read: protectedProcedure.input(z.object({ otherUserId: z.number() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await database.update(messages).set({ isRead: true }).where(and(eq(messages.senderId, input.otherUserId), eq(messages.receiverId, ctx.user.id)));
+      await database.update(messages).set({ isRead: true, deliveryStatus: "read" }).where(and(eq(messages.senderId, input.otherUserId), eq(messages.receiverId, ctx.user.id)));
     }),
     forward: protectedProcedure.input(z.object({ messageId: z.number().optional(), messageIds: z.array(z.number()).optional(), receiverId: z.number().optional(), receiverIds: z.array(z.number()).optional() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();

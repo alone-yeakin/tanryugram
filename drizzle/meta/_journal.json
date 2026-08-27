@@ -267,6 +267,13 @@
       "when": 1787840813235,
       "tag": "0037_dashing_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "5",
+      "when": 1787846611735,
+      "tag": "0038_cool_lifeguard",
+      "breakpoints": true
     }
   ]
 }

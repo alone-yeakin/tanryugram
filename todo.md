@@ -711,9 +711,20 @@
 
 ## Final Production Audit & Repair (Current Session)
 
-- [ ] Audit failing queries: marketplace, posts, postMedia, mediaPolicy, and user-lookup
-- [ ] Implement schema-tolerant raw SQL fallbacks for all failing public database helpers
-- [ ] Harden public procedure gating to prevent "Please login" errors on the landing page
-- [ ] Add regression coverage for the repaired public paths and production build validation
-- [ ] Save and publish the final stable checkpoint
-- [ ] Deliver release report and request mobile/browser cache-cleared retest
+- [x] Audit failing queries: marketplace, posts, postMedia, mediaPolicy, and user-lookup
+- [x] Implement schema-tolerant raw SQL fallbacks for all failing public database helpers
+- [x] Harden public procedure gating to prevent "Please login" errors on the landing page
+- [x] Add regression coverage for the repaired public paths and production build validation
+- [x] Save and publish the final stable checkpoint
+- [x] Deliver release report and request mobile/browser cache-cleared retest
+
+## Messenger Interaction & Theme Enhancements (Current Session)
+
+- [ ] Implement a reliable live typing indicator for direct Messenger chats
+- [ ] Implement clear read-receipt state and mark incoming messages read while viewing a chat
+- [ ] Add or polish an accessible dark-mode toggle in the primary navigation bar
+- [ ] Add regression tests for typing/read receipts and theme-toggle behavior
+- [ ] Run TypeScript, Vitest, production build, and responsive visual verification
+- [ ] Save and publish the verified checkpoint
+- [ ] Deliver the updated release checkpoint and retest guidance
+

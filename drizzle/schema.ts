@@ -433,6 +433,7 @@ export const messages = mysqlTable("messages", {
   receiverId: int("receiverId").notNull(),
   content: text("content").notNull(),
   isRead: boolean("isRead").default(false).notNull(),
+  deliveryStatus: mysqlEnum("deliveryStatus", ["sent", "delivered", "read"]).default("sent").notNull(),
   attachmentUrl: text("attachmentUrl"),
   attachmentType: mysqlEnum("attachmentType", ["image", "video", "file", "audio", "link"]),
   replyToId: int("replyToId"),
