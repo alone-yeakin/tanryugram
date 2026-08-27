@@ -708,3 +708,12 @@
 - [x] Verify strict owner-only authorization for all restored procedures
 - [x] Run focused regression tests, production build, and responsive validation before publishing
 - [x] Audit and repair the follower-display issue to ensure real data visibility
+
+## Final Production Audit & Repair (Current Session)
+
+- [ ] Audit failing queries: marketplace, posts, postMedia, mediaPolicy, and user-lookup
+- [ ] Implement schema-tolerant raw SQL fallbacks for all failing public database helpers
+- [ ] Harden public procedure gating to prevent "Please login" errors on the landing page
+- [ ] Add regression coverage for the repaired public paths and production build validation
+- [ ] Save and publish the final stable checkpoint
+- [ ] Deliver release report and request mobile/browser cache-cleared retest

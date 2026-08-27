@@ -21,7 +21,7 @@ export function StoryBarLive({ onOpen }: { onOpen: (story: any, allStories?: any
   const { user, isAuthenticated } = useAuth();
   const storyQuery = trpc.stories.list.useQuery(undefined, { enabled: isAuthenticated });
   const upload = trpc.media.uploadBase64.useMutation();
-  const policyQuery = trpc.media.policy.useQuery();
+  const policyQuery = trpc.media.policy.useQuery(undefined, { staleTime: 60000 });
   const create = trpc.stories.create.useMutation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -158,8 +158,9 @@ export function StoryViewerLive({ story, onClose, onNext, onPrevious }: { story:
 const reactions = [{ type: "like", emoji: "👍", label: "Like" }, { type: "love", emoji: "❤️", label: "Love" }, { type: "haha", emoji: "😂", label: "Haha" }, { type: "wow", emoji: "😮", label: "Wow" }, { type: "sad", emoji: "😢", label: "Sad" }, { type: "angry", emoji: "😡", label: "Angry" }] as const;
 
 export function ReactionButton({ postId, liked, onLike }: { postId: number; liked: boolean; onLike: () => void }) {
+  const { isAuthenticated } = useAuth();
   const mutation = trpc.posts.reaction.useMutation();
-  const reactionQuery = trpc.posts.reactions.useQuery({ postId }); const reactionRows = Array.isArray(reactionQuery.data) ? reactionQuery.data.filter((entry: any) => Boolean(entry?.reaction?.id && entry?.user?.id)) : [];
+  const reactionQuery = trpc.posts.reactions.useQuery({ postId }, { enabled: isAuthenticated }); const reactionRows = Array.isArray(reactionQuery.data) ? reactionQuery.data.filter((entry: any) => Boolean(entry?.reaction?.id && entry?.user?.id)) : [];
   const [open, setOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const timer = useRef<number | null>(null);
@@ -170,7 +171,7 @@ export function ReactionButton({ postId, liked, onLike }: { postId: number; like
 
 export function MultiImageComposer({ onClose }: { onClose: () => void }) {
   const upload = trpc.media.uploadBase64.useMutation();
-  const policyQuery = trpc.media.policy.useQuery();
+  const policyQuery = trpc.media.policy.useQuery(undefined, { staleTime: 60000 });
   const create = trpc.posts.create.useMutation();
   const [files, setFiles] = useState<File[]>([]);
   const [active, setActive] = useState(0);

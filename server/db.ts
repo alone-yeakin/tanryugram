@@ -8,15 +8,20 @@ import { TRPCError } from "@trpc/server";
 
 const drizzleSchema = { ...schema, ...relationSchema };
 
-let connection: mysql.Connection | null = null;
+let pool: mysql.Pool | null = null;
 let dbInstance: MySql2Database<typeof drizzleSchema> | null = null;
 
 export async function getDb() {
   const url = process.env.DATABASE_URL;
   if (!url) return null;
-  if (!connection) {
-    connection = await mysql.createConnection(url);
-    dbInstance = drizzle(connection, { schema: drizzleSchema, mode: "default" });
+  if (!pool) {
+    pool = mysql.createPool({
+      uri: url,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+    });
+    dbInstance = drizzle(pool, { schema: drizzleSchema, mode: "default" });
   }
   return dbInstance;
 }
@@ -26,15 +31,29 @@ export async function getDb() {
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return null;
-  const user = (await db.select().from(users).where(eq(users.openId, openId)).limit(1))[0];
-  return user || null;
+  try {
+    const user = (await db.select().from(users).where(eq(users.openId, openId)).limit(1))[0];
+    return user || null;
+  } catch (err) {
+    console.error("getUserByOpenId failed, trying raw SQL fallback:", err);
+    const res = await db.execute(sql`select * from users where openId = ${openId} limit 1`);
+    const rows = (res[0] as unknown) as any[];
+    return rows[0] || null;
+  }
 }
 
 export async function getUserById(id: number) {
   const db = await getDb();
   if (!db) return null;
-  const user = (await db.select().from(users).where(eq(users.id, id)).limit(1))[0];
-  return user || null;
+  try {
+    const user = (await db.select().from(users).where(eq(users.id, id)).limit(1))[0];
+    return user || null;
+  } catch (err) {
+    console.error("getUserById failed, trying raw SQL fallback:", err);
+    const res = await db.execute(sql`select * from users where id = ${id} limit 1`);
+    const rows = (res[0] as unknown) as any[];
+    return rows[0] || null;
+  }
 }
 
 export async function getUsers() {
@@ -139,8 +158,15 @@ export async function reviewBadgeApplication(applicationId: number, reviewerId: 
 export async function getMediaUploadPolicy() {
   const db = await getDb();
   if (!db) return { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
-  const policy = (await db.select().from(mediaUploadPolicy).limit(1))[0];
-  return policy || { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
+  try {
+    const policy = (await db.select().from(mediaUploadPolicy).limit(1))[0];
+    return policy || { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
+  } catch (err) {
+    console.error("getMediaUploadPolicy failed, trying raw SQL fallback:", err);
+    const res = await db.execute(sql`select * from mediaUploadPolicy limit 1`);
+    const rows = (res[0] as unknown) as any[];
+    return rows[0] || { photosEnabled: true, profilePhotosEnabled: true, videosEnabled: false };
+  }
 }
 
 export async function setMediaUploadPolicy(policy: { photosEnabled: boolean; profilePhotosEnabled: boolean; videosEnabled: boolean }, userId: number) {
@@ -177,8 +203,15 @@ export async function setEmailDeliverySettings(settings: { emailDeliveryEnabled:
 export async function getPlatformPaymentSettings() {
   const db = await getDb();
   if (!db) return { paypalEmail: null, bkashNumber: null, nagadNumber: null, instructions: null };
-  const settings = (await db.select().from(platformPaymentSettings).limit(1))[0];
-  return settings || { paypalEmail: null, bkashNumber: null, nagadNumber: null, instructions: null };
+  try {
+    const settings = (await db.select().from(platformPaymentSettings).limit(1))[0];
+    return settings || { paypalEmail: null, bkashNumber: null, nagadNumber: null, instructions: null };
+  } catch (err) {
+    console.error("getPlatformPaymentSettings failed, trying raw SQL fallback:", err);
+    const res = await db.execute(sql`select * from platformPaymentSettings limit 1`);
+    const rows = (res[0] as unknown) as any[];
+    return rows[0] || { paypalEmail: null, bkashNumber: null, nagadNumber: null, instructions: null };
+  }
 }
 
 export async function setPlatformPaymentSettings(settings: { paypalEmail?: string | null; bkashNumber?: string | null; nagadNumber?: string | null; instructions?: string | null }, userId: number) {
@@ -196,8 +229,15 @@ export async function setPlatformPaymentSettings(settings: { paypalEmail?: strin
 export async function getPlatformSettings() {
   const db = await getDb();
   if (!db) return { eventTheme: null, maintenanceMode: false };
-  const settings = (await db.select().from(platformSettings).limit(1))[0];
-  return settings || { eventTheme: null, maintenanceMode: false };
+  try {
+    const settings = (await db.select().from(platformSettings).limit(1))[0];
+    return settings || { eventTheme: null, maintenanceMode: false };
+  } catch (err) {
+    console.error("getPlatformSettings failed, trying raw SQL fallback:", err);
+    const res = await db.execute(sql`select * from platformSettings limit 1`);
+    const rows = (res[0] as unknown) as any[];
+    return rows[0] || { eventTheme: null, maintenanceMode: false };
+  }
 }
 
 export async function setPlatformSetting(settings: { eventTheme?: string | null; maintenanceMode?: boolean }, userId: number) {
@@ -220,7 +260,8 @@ export async function getBadgeMarketplaceSettings() {
   } catch (err) {
     console.error("Badge marketplace settings select failed, trying raw SQL fallback:", err);
     const res = await db.execute(sql`select id, badgeType, isPaid, price, updatedBy, updatedAt from badgeMarketplaceSettings`);
-    return (res[0] as unknown) as any[];
+    const rows = (res[0] as unknown) as any[];
+    return Array.isArray(rows) ? rows : [];
   }
 }
 
@@ -270,7 +311,8 @@ export async function getPosts() {
   } catch (err) {
     console.error("Posts select failed, trying raw SQL fallback:", err);
     const res = await db.execute(sql`select id, userId, caption, mediaUrl, mediaType, isPremium, location, feeling, taggedUsers, likesCount, commentsCount, isHidden, createdAt from posts order by createdAt desc`);
-    postRows = (res[0] as unknown) as any[];
+    const rawRows = (res[0] as unknown) as any[];
+    postRows = Array.isArray(rawRows) ? rawRows : [];
   }
 
   if (!postRows.length) return [];
@@ -278,10 +320,25 @@ export async function getPosts() {
   const postIds = postRows.map((post) => post.id);
   const userIds = Array.from(new Set(postRows.map((post) => post.userId).filter((id): id is number => Number.isFinite(id))));
 
-  const [mediaRows, userRows] = await Promise.all([
-    postIds.length ? db.select().from(postMedia).where(inArray(postMedia.postId, postIds)).orderBy(asc(postMedia.sortOrder)) : Promise.resolve([]),
-    userIds.length ? db.select().from(users).where(inArray(users.id, userIds)) : Promise.resolve([]),
-  ]);
+  let mediaRows: any[] = [];
+  let userRows: any[] = [];
+
+  try {
+    const [m, u] = await Promise.all([
+      postIds.length ? db.select().from(postMedia).where(inArray(postMedia.postId, postIds)).orderBy(asc(postMedia.sortOrder)) : Promise.resolve([]),
+      userIds.length ? db.select().from(users).where(inArray(users.id, userIds)) : Promise.resolve([]),
+    ]);
+    mediaRows = m;
+    userRows = u;
+  } catch (err) {
+    console.error("Posts relation batch select failed, trying raw SQL fallback:", err);
+    const [mRes, uRes] = await Promise.all([
+      postIds.length ? db.execute(sql`select * from postMedia where postId in (${sql.join(postIds, sql`, `)}) order by sortOrder asc`) : Promise.resolve([[]]),
+      userIds.length ? db.execute(sql`select * from users where id in (${sql.join(userIds, sql`, `)})`) : Promise.resolve([[]]),
+    ]);
+    mediaRows = (mRes[0] as unknown) as any[];
+    userRows = (uRes[0] as unknown) as any[];
+  }
 
   return attachPostRelations(postRows, userRows, mediaRows);
 }

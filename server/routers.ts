@@ -176,13 +176,18 @@ export const appRouter = router({
         database.select().from(userSettings).where(eq(userSettings.userId, user.id)).limit(1),
       ]);
 
+      const realFollowersCount = followersCount[0]?.count || 0;
+      const displayFollowers = (user.displayedFollowersCount !== null && user.displayedFollowersCount !== undefined) 
+        ? user.displayedFollowersCount 
+        : realFollowersCount;
+
       return {
         user: sanitizeAuthUser(user),
         posts: [], // Posts are fetched separately or can be added here
         stats: {
-          followers: user.displayedFollowersCount ?? followersCount[0].count,
-          following: followingCount[0].count,
-          posts: postsCount[0].count,
+          followers: displayFollowers,
+          following: followingCount[0]?.count || 0,
+          posts: postsCount[0]?.count || 0,
         },
         privacy: {
           isPrivate: settings[0]?.isPrivate ?? false,
@@ -1030,13 +1035,15 @@ export const appRouter = router({
       const database = await db.getDb();
       if (!database) return [];
       
-      // Get stories from users the current user follows, plus their own stories
-      const followingRes = await database.select({ followingId: follows.followingId }).from(follows).where(eq(follows.followerId, ctx.user.id));
-      const userIds = [ctx.user.id, ...followingRes.map(r => r.followingId)];
-      
-      const res = await database.select({ story: stories, owner: users }).from(stories).innerJoin(users, eq(stories.userId, users.id)).where(and(inArray(stories.userId, userIds), gt(stories.expiresAt, new Date()))).orderBy(desc(stories.createdAt));
-      
-      return res.map(r => ({ ...r, owner: sanitizeAuthUser(r.owner) }));
+    // Get stories from users the current user follows, plus their own stories
+    const followingRes = await database.select({ followingId: follows.followingId }).from(follows).where(eq(follows.followerId, ctx.user.id));
+    const userIds = [ctx.user.id, ...followingRes.map(r => r.followingId)];
+    
+    if (!userIds.length) return [];
+    
+    const res = await database.select({ story: stories, owner: users }).from(stories).innerJoin(users, eq(stories.userId, users.id)).where(and(inArray(stories.userId, userIds), gt(stories.expiresAt, new Date()))).orderBy(desc(stories.createdAt));
+    
+    return res.map(r => ({ ...r, owner: sanitizeAuthUser(r.owner) }));
     }),
     viewers: protectedProcedure.input(z.object({ storyId: z.number() })).query(async ({ input }) => {
       const database = await db.getDb();
