@@ -17,6 +17,10 @@ const proposalSchema = z.object({
     "disable_photo_uploads",
     "enable_video_uploads",
     "disable_video_uploads",
+    "set_event_theme_none",
+    "set_event_theme_ramadan",
+    "set_event_theme_eid",
+    "set_event_theme_independence",
   ])).max(8),
   requiresCodeChange: z.boolean(),
   warning: z.string().max(500),
@@ -91,6 +95,10 @@ export function applySafeGeminiActions(actions: GeminiFeatureProposal["safeActio
     }
     if (action === "enable_video_uploads") next.videosEnabled = true;
     if (action === "disable_video_uploads") next.videosEnabled = false;
+    if (action === "set_event_theme_none") (next as any).eventTheme = null;
+    if (action === "set_event_theme_ramadan") (next as any).eventTheme = "ramadan";
+    if (action === "set_event_theme_eid") (next as any).eventTheme = "eid";
+    if (action === "set_event_theme_independence") (next as any).eventTheme = "independence";
   }
   if (next.signupVerificationEnabled && !next.emailDeliveryEnabled) throw new Error("Signup verification cannot be enabled while email delivery is disabled");
   return next;

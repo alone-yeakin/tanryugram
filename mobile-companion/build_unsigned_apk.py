@@ -5,7 +5,8 @@ import sys
 print("=== Tanryugram Unsigned APK Build Script ===")
 print("Generating native Android project using Expo prebuild / CLI...")
 
-os.chdir("/home/ubuntu/pulse-social/mobile-companion")
+os.environ["ANDROID_HOME"] = "/home/ubuntu/android-sdk"
+os.chdir("/home/ubuntu/tanryugram/mobile-companion")
 
 # Install dependencies if needed
 if not os.path.exists("node_modules"):

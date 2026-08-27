@@ -592,15 +592,15 @@
 
 - [x] APK Fix: Resolved native module crash by removing incompatible expo-navigation-bar and expo-system-ui dependencies and reverting to a minimal stable App.tsx
 
-- [ ] Badge Marketplace: Add a catalog of badges (blue, gold, etc.) with pricing and manual payment contact info (PayPal, bKash, Nagad)
-- [ ] Badge Marketplace: Implement mutually exclusive display rules (Blue badge + max one other badge)
-- [ ] Creator Studio: Add owner-only badge request review and approval workflow
-- [ ] Creator Studio: Extend the Gemini assistant to safely handle badge and payment configuration requests
-- [ ] Badge Marketplace: Add regression tests for badge display logic and owner review authorization
+- [x] Badge Marketplace: Add a catalog of badges (blue, gold, etc.) with pricing and manual payment contact info (PayPal, bKash, Nagad)
+- [x] Badge Marketplace: Implement mutually exclusive display rules (Blue badge + max one other badge)
+- [x] Creator Studio: Add owner-only badge request review and approval workflow
+- [x] Creator Studio: Extend the Gemini assistant to safely handle badge and payment configuration requests
+- [x] Badge Marketplace: Add regression tests for badge display logic and owner review authorization
 
-- [ ] Badge Marketplace: Expand badge catalog with Gold, VIP, Founder, and Legend tiers
-- [ ] Badge Marketplace: Implement mutually exclusive display logic (Blue + one other, or just one other)
-- [ ] Profile Customization: Add Discord-style themes, custom text colors, and background accents
-- [ ] Premium Messaging: Overhaul group message UI with better layouts, transitions, and status indicators
-- [ ] Platform Settings: Add owner-managed payment contact instructions for PayPal, bKash, and Nagad
-- [ ] Creator Studio: Add manual approval workflow for paid badge requests
+- [x] Badge Marketplace: Expand badge catalog with Gold, VIP, Founder, and Legend tiers
+- [x] Badge Marketplace: Implement mutually exclusive display logic (Blue + one other, or just one other)
+- [x] Profile Customization: Add Discord-style themes, custom text colors, and background accents
+- [x] Premium Messaging: Overhaul group message UI with better layouts, transitions, and status indicators
+- [x] Platform Settings: Add owner-managed payment contact instructions for PayPal, bKash, and Nagad
+- [x] Creator Studio: Add manual approval workflow for paid badge requests

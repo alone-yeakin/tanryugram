@@ -9,7 +9,7 @@ import { initialsAvatar } from "@/lib/mediaUrl";
 import { resolveProfileUser } from "@/lib/profileViewData";
 import { toast } from "sonner";
 import {
-  Bell, Bookmark, Check, ChevronRight, CircleHelp, Compass, CreditCard, Download, Flag, Heart, Home as HomeIcon, ImagePlus, Lock, LogOut, Mail, Menu, MessageCircle, MoreHorizontal, Moon, PhoneCall, PhoneIncoming, PhoneMissed, Play, Plus, Search, Send, Loader2, Settings, Share2, ShieldCheck, Sparkles, Sun, Users, Video, X, Zap,
+  Bell, Bookmark, Check, ChevronRight, CircleHelp, Compass, CreditCard, Download, Flag, Heart, Home as HomeIcon, ImagePlus, Lock, LogOut, Mail, Menu, MessageCircle, MoreHorizontal, Moon, PhoneCall, PhoneIncoming, PhoneMissed, Play, Plus, Search, Send, Loader2, Settings, Share2, ShieldCheck, Sparkles, Star, Sun, Users, Video, X, Zap,
 } from "lucide-react";
 import { LoginPanel, AdminView, AccountSettings, ReelSubmissionCard } from "@/components/TanryugramPanels";
 import { AdvancedMessagesView, MultiImageComposer, ReactionButton, StoryBarLive, StoryViewerLive } from "@/components/TanryugramAdvancedFeatures";
@@ -109,6 +109,8 @@ export default function Home() {
   const unreadNotificationsQuery = trpc.notifications.unreadCount.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 8000 });
   const markNotificationsReadMutation = trpc.notifications.markRead.useMutation();
   const registerPushTokenMutation = trpc.notifications.registerPushToken.useMutation();
+  const marketplaceQuery = trpc.marketplace.getSettings.useQuery();
+  const eventTheme = marketplaceQuery.data?.platform.eventTheme;
   const incomingCallsQuery = trpc.messages.incomingCalls.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 1200 });
   const recentCallsQuery = trpc.messages.recentCalls.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000 });
   const globalCallUpdateMutation = trpc.messages.updateCall.useMutation({ onSuccess: () => incomingCallsQuery.refetch() });
@@ -226,7 +228,32 @@ export default function Home() {
     <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Owner space</p>
     <NavItem icon={Sparkles} label="Creator studio" active={view === "admin"} onClick={() => setView("admin")} />
   </div>
-)}<div className="mt-auto rounded-[22px] bg-gradient-to-br from-violet-500/15 via-fuchsia-500/10 to-orange-500/15 p-4"><Sparkles className="mb-3 h-5 w-5 text-violet-500" /><p className="text-sm font-semibold">Turn attention into income.</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Offer premium work and let your people support the process.</p><button onClick={handleTip} className="mt-3 text-xs font-semibold text-violet-600 dark:text-violet-300">Explore monetization <ChevronRight className="ml-1 inline h-3 w-3" /></button></div></aside><main className="min-w-0 flex-1 pt-6 lg:pt-8"><div className="mb-7 flex items-end justify-between"><div><p className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-violet-500">{view === "explore" ? "Curated for you" : view === "messages" ? "Stay close" : "Your creative orbit"}</p><h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">{view === "home" ? "Make space for what you’re making." : view === "explore" ? "Find your next obsession" : view === "messages" ? "Conversations" : view === "profile" ? profileName : "Creator studio"}</h1><p className="mt-2 max-w-xl text-sm text-muted-foreground">{view === "home" ? "Share the process, find your people, and keep the work moving." : view === "explore" ? "Discover independent voices, new references, and the process behind the post." : view === "messages" ? "Real-time conversations with the people who keep your work moving." : view === "profile" ? `@${profileHandle} · Building in public since 2024` : "Understand your audience, publish premium work, and keep your community close."}</p></div>{view === "home" && <button onClick={() => setShowComposer(true)} className="hidden items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-xs font-semibold shadow-sm transition hover:border-violet-300 hover:text-violet-600 sm:flex"><ImagePlus className="h-4 w-4" /> New post</button>}</div>{view === "home" || view === "explore" ? <><StoryBarLive onOpen={openStorySequence} />{view === "home" && <><CallHistoryCard rows={(recentCallsQuery.data || []) as any[]} ringtone={ringtone} onRingtoneChange={setRingtone} /><ContactsCard contacts={creators} onOpenMessages={() => setView("messages")} /></>}<div className="grid gap-6 xl:grid-cols-[minmax(0,680px)_280px]">{view === "explore" && <div className="col-span-full mb-2"><div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1"><span className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background">For you</span>{["Memes & Shorts", "Design", "Music", "Film", "Fashion", "Writing"].map((tag) => <button key={tag} className="whitespace-nowrap rounded-full border border-border bg-card px-4 py-2 text-xs font-medium text-muted-foreground hover:border-violet-300 hover:text-violet-600">{tag}</button>)}</div><NativeReelsFeed /></div>}<div className="space-y-6">{displayedPosts.map((post) => <PostCard key={`${post.id}-${user?.id ?? "guest"}`} post={post} liked={liked.includes(post.id)} saved={saved.includes(post.id)} onLike={() => handleLike(post.id)} onSave={() => handleSave(post.id)} onComment={(value) => handleComment(post.id, value)} onOpenComments={() => setCommentPostId(post.id)} onSubscribe={() => handleSubscribe()} onSelectUser={(u) => { setSelectedUser(u); setView("profile"); }} onReport={() => setReportTarget({ targetType: (post as any).mediaType === "video" ? "video" : "post", targetId: post.id })} />)}
+)}<div className="mt-auto rounded-[22px] bg-gradient-to-br from-violet-500/15 via-fuchsia-500/10 to-orange-500/15 p-4"><Sparkles className="mb-3 h-5 w-5 text-violet-500" /><p className="text-sm font-semibold">Turn attention into income.</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Offer premium work and let your people support the process.</p><button onClick={handleTip} className="mt-3 text-xs font-semibold text-violet-600 dark:text-violet-300">Explore monetization <ChevronRight className="ml-1 inline h-3 w-3" /></button></div></aside><main className="min-w-0 flex-1 pt-6 lg:pt-8"><div className="mb-7 flex items-end justify-between"><div><p className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-violet-500">{view === "explore" ? "Curated for you" : view === "messages" ? "Stay close" : "Your creative orbit"}</p><h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">{view === "home" ? "Make space for what you’re making." : view === "explore" ? "Find your next obsession" : view === "messages" ? "Conversations" : view === "profile" ? profileName : "Creator studio"}</h1><p className="mt-2 max-w-xl text-sm text-muted-foreground">{view === "home" ? "Share the process, find your people, and keep the work moving." : view === "explore" ? "Discover independent voices, new references, and the process behind the post." : view === "messages" ? "Real-time conversations with the people who keep your work moving." : view === "profile" ? `@${profileHandle} · Building in public since 2024` : "Understand your audience, publish premium work, and keep your community close."}</p></div>{view === "home" && <button onClick={() => setShowComposer(true)} className="hidden items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-xs font-semibold shadow-sm transition hover:border-violet-300 hover:text-violet-600 sm:flex"><ImagePlus className="h-4 w-4" /> New post</button>}</div>{view === "home" || view === "explore" ? <>
+  {eventTheme && (
+    <div className={`mb-8 overflow-hidden rounded-[28px] border p-6 text-center shadow-sm transition-all duration-700 ${
+      eventTheme === "ramadan" ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/30 dark:bg-emerald-950/40 dark:text-emerald-100" :
+      eventTheme === "eid" ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/30 dark:bg-amber-950/40 dark:text-amber-100" :
+      eventTheme === "independence" ? "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/30 dark:bg-rose-950/40 dark:text-rose-100" :
+      "border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-900/30 dark:bg-violet-950/40 dark:text-violet-100"
+    }`}>
+      <div className="flex flex-col items-center gap-2">
+        <div className="rounded-full bg-white/50 p-2 dark:bg-black/20">
+          {eventTheme === "ramadan" ? <Moon className="h-6 w-6" /> :
+           eventTheme === "eid" ? <Sparkles className="h-6 w-6" /> :
+           eventTheme === "independence" ? <Flag className="h-6 w-6" /> :
+           <Star className="h-6 w-6" />}
+        </div>
+        <h2 className="font-display text-xl font-bold uppercase tracking-widest">
+          {eventTheme === "ramadan" ? "Ramadan Kareem" :
+           eventTheme === "eid" ? "Eid Mubarak" :
+           eventTheme === "independence" ? "Happy Independence Day" :
+           `Happy ${eventTheme.replace("_", " ")}`}
+        </h2>
+        <p className="text-xs font-medium opacity-80">Wishing the TanRyuGram community a blessed time.</p>
+      </div>
+    </div>
+  )}
+  <StoryBarLive onOpen={openStorySequence} />{view === "home" && <><CallHistoryCard rows={(recentCallsQuery.data || []) as any[]} ringtone={ringtone} onRingtoneChange={setRingtone} /><ContactsCard contacts={creators} onOpenMessages={() => setView("messages")} /></>}<div className="grid gap-6 xl:grid-cols-[minmax(0,680px)_280px]">{view === "explore" && <div className="col-span-full mb-2"><div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1"><span className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background">For you</span>{["Memes & Shorts", "Design", "Music", "Film", "Fashion", "Writing"].map((tag) => <button key={tag} className="whitespace-nowrap rounded-full border border-border bg-card px-4 py-2 text-xs font-medium text-muted-foreground hover:border-violet-300 hover:text-violet-600">{tag}</button>)}</div><NativeReelsFeed /></div>}<div className="space-y-6">{displayedPosts.map((post) => <PostCard key={`${post.id}-${user?.id ?? "guest"}`} post={post} liked={liked.includes(post.id)} saved={saved.includes(post.id)} onLike={() => handleLike(post.id)} onSave={() => handleSave(post.id)} onComment={(value) => handleComment(post.id, value)} onOpenComments={() => setCommentPostId(post.id)} onSubscribe={() => handleSubscribe()} onSelectUser={(u) => { setSelectedUser(u); setView("profile"); }} onReport={() => setReportTarget({ targetType: (post as any).mediaType === "video" ? "video" : "post", targetId: post.id })} />)}
   <CommentBottomSheet postId={commentPostId!} isOpen={commentPostId !== null} onClose={() => setCommentPostId(null)} /><div className="rounded-[24px] border border-dashed border-border p-8 text-center"><Zap className="mx-auto mb-3 h-5 w-5 text-violet-500" /><p className="text-sm font-semibold">You are all caught up</p><p className="mt-1 text-xs text-muted-foreground">New work from your orbit will appear here.</p></div></div><aside className="hidden space-y-5 xl:block"><div className="rounded-[26px] border border-border/70 bg-card p-5 shadow-sm"><div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Curated people</p><h3 className="mt-1 font-semibold">Worth following</h3></div><button className="text-xs font-semibold text-violet-500">See all</button></div>{creators.map((creator) => <div key={creator.username} className="flex items-center gap-3 border-b border-border/50 py-3 last:border-0 last:pb-0"><Avatar src={creator.avatar} size="sm" /><div className="min-w-0 flex-1"><div className="flex items-center gap-1"><p className="truncate text-xs font-semibold">{creator.name}</p>{creator.verified && <VerifiedBadge />}</div><p className="truncate text-[11px] text-muted-foreground">{creator.role} · {creator.followers}</p></div><button className="rounded-full border border-border px-2.5 py-1.5 text-[10px] font-bold text-foreground transition hover:border-violet-400 hover:text-violet-600">Follow</button></div>)}</div></aside></div></> : view === "messages" ? <MessengerExperience key={`messenger-${activePeer?.id ?? "inbox"}`} onExit={() => { setActivePeer(null); setActivePeerId(null); setView("home"); }} initialPeer={activePeer} onOpenProfile={(profile) => { setSelectedUser(profile); setView("profile"); }} /> : view === "profile" ? <ProfileView profileUser={selectedUser || user} currentUser={user} isAuthenticated={isAuthenticated} onLogin={openNativeLogin} onTip={handleTip} onReport={() => setReportTarget({ targetType: "account", targetId: Number((selectedUser || user)?.id || 0) })} onOpenMessage={(u) => { const peer = normalizeMessengerPeer(u); if (!peer) { toast.error("This user cannot receive messages yet."); return; } setActivePeer(peer); setActivePeerId(peer.id); setView("messages"); }} setView={setView} /> : ownerStudioVisible ? <AdminView onTip={handleTip} /> : <StudioView onTip={handleTip} />}</main></div><nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-border/70 bg-background/90 px-2 py-2 backdrop-blur-xl lg:hidden"><div className="mx-auto flex max-w-lg items-center justify-around">{navItems.slice(0, 4).map((item) => <button key={item.label} onClick={() => item.label === "Activity" ? setShowNotifications(true) : navigateToView(item.view)} className={`relative flex min-w-[58px] flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-[10px] font-medium ${item.view === view ? "text-foreground" : "text-muted-foreground"}`}><item.icon className={`h-[18px] w-[18px] ${item.view === view ? "fill-foreground/10" : ""}`} />{item.label}{item.badge ? <span className="absolute right-2 top-0 h-1.5 w-1.5 rounded-full bg-violet-500" /> : null}</button>)}<button onClick={() => setShowComposer(true)} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-foreground text-background shadow-lg"><Plus className="h-5 w-5" /></button></div></nav>{showNotifications && <div className="fixed inset-0 z-50 flex items-start justify-end bg-foreground/20 p-4 backdrop-blur-sm sm:p-6" onClick={() => setShowNotifications(false)}><div className="mt-14 w-full max-w-sm rounded-[26px] border border-border bg-card p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-500">Your activity</p><h2 className="mt-1 text-lg font-semibold">Notifications</h2></div><button onClick={() => setShowNotifications(false)} className="rounded-full p-2 hover:bg-muted"><X className="h-4 w-4" /></button></div><div className="mt-5 space-y-1">
   {liveNotifications.length ? liveNotifications.map((row: any) => (
     <NotificationRow key={row.notification.id} row={row} onSelect={(type, id) => {
@@ -519,31 +546,55 @@ function ProfileView({ profileUser, currentUser, isAuthenticated, onLogin, onTip
     }
   };
 
+  const themeColor = targetUser?.themeColor || "#7c3aed";
+  const textColor = targetUser?.customTextColor || "inherit";
+  const bannerUrl = targetUser?.profileBannerUrl;
+
   return (
     <div className="space-y-6">
-      <div className="rounded-[28px] border border-border/70 bg-card p-5 shadow-sm sm:p-7">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-          <div className="relative"><Avatar src={avatar} size="lg" ring />{!isOwnProfile && isAuthenticated && <button type="button" onClick={onReport} aria-label="Report account" className="absolute -right-2 -top-2 rounded-full border border-border bg-card p-2 text-rose-500 shadow-sm hover:bg-rose-500/10"><Flag className="h-4 w-4" /></button>}</div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-display text-2xl font-bold">{name}</h2>
-              {targetUser?.showBadge !== false && <ProfileBadge badgeType={targetUser?.badgeType} legacyVerified={targetUser?.isVerified} label={targetUser?.badgeLabel} />}
-              <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${targetUser?.isCreator ? "bg-violet-500/10 text-violet-500" : "bg-muted text-muted-foreground"}`}>
-                {targetUser?.badgeLabel || (targetUser?.isCreator ? "Creator" : "Member")}
-              </span>
-            </div>
-              <p className="mt-1 text-sm text-muted-foreground">@{handle} {isPrivateProfile && <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold"><Lock className="h-3 w-3" /> Private</span>}</p>
-            <p className="mt-4 max-w-xl text-sm leading-6 whitespace-pre-wrap">{bioText}</p>
-            <div className="mt-5 flex gap-6">
-              <Stat label="Posts" value={String(stats.posts || userPosts.length)} />
-              {canViewFollowers ? <button onClick={() => setActiveListModal("followers")} className="text-left transition hover:opacity-80"><Stat label="Followers" value={String(stats.followers)} /></button> : <div title="Followers list is private"><Stat label="Followers" value={String(stats.followers)} /></div>}
-              {canViewFollowing ? <button onClick={() => setActiveListModal("following")} className="text-left transition hover:opacity-80"><Stat label="Following" value={String(stats.following)} /></button> : <div title="Following list is private"><Stat label="Following" value={String(stats.following)} /></div>}
-            </div>
+      <div className="overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-sm transition-all duration-500" style={{ borderLeftColor: themeColor, borderLeftWidth: bannerUrl ? "0" : "4px" }}>
+        {bannerUrl && (
+          <div className="relative h-32 w-full bg-muted sm:h-48">
+            <SafeImage src={bannerUrl} fallbackName={name} className="h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           </div>
-          <div className="flex flex-wrap gap-2">
-            {!isOwnProfile && <ProfileFollowButton isAuthenticated={isAuthenticated} isFollowing={isFollowing} requestPending={requestPending} isPending={toggleFollowMutation.isPending} onFollow={handleFollow} onLogin={onLogin} />}
-            {!isOwnProfile && isAuthenticated && <ProfileMessageButton user={targetUser} onOpen={onOpenMessage} />}
-            <button onClick={onTip} className="rounded-xl border border-border px-4 py-2.5 text-xs font-semibold">Tip creator</button>
+        )}
+        <div className={`p-5 sm:p-7 ${bannerUrl ? "-mt-12 sm:-mt-16" : ""}`}>
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+            <div className="relative">
+              <div className={`rounded-full p-1 bg-card ${bannerUrl ? "shadow-xl" : ""}`}>
+                <Avatar src={avatar} size="lg" ring />
+              </div>
+              {!isOwnProfile && isAuthenticated && (
+                <button type="button" onClick={onReport} aria-label="Report account" className="absolute -right-2 -top-2 rounded-full border border-border bg-card p-2 text-rose-500 shadow-sm hover:bg-rose-500/10">
+                  <Flag className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-display text-2xl font-bold" style={{ color: textColor }}>{name}</h2>
+                <div className="flex items-center gap-1">
+                  {targetUser?.showBadge !== false && <ProfileBadge badgeType={targetUser?.badgeType} legacyVerified={targetUser?.isVerified} label={targetUser?.badgeLabel} />}
+                  {targetUser?.secondaryBadgeType && targetUser.secondaryBadgeType !== "none" && <ProfileBadge badgeType={targetUser.secondaryBadgeType} />}
+                </div>
+                <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest" style={{ backgroundColor: `${themeColor}20`, color: themeColor }}>
+                  {targetUser?.badgeLabel || (targetUser?.isCreator ? "Creator" : "Member")}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">@{handle} {isPrivateProfile && <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold"><Lock className="h-3 w-3" /> Private</span>}</p>
+              <p className="mt-4 max-w-xl text-sm leading-6 whitespace-pre-wrap" style={{ color: textColor }}>{bioText}</p>
+              <div className="mt-5 flex gap-6">
+                <Stat label="Posts" value={String(stats.posts || userPosts.length)} />
+                {canViewFollowers ? <button onClick={() => setActiveListModal("followers")} className="text-left transition hover:opacity-80"><Stat label="Followers" value={String(stats.followers)} /></button> : <div title="Followers list is private"><Stat label="Followers" value={String(stats.followers)} /></div>}
+                {canViewFollowing ? <button onClick={() => setActiveListModal("following")} className="text-left transition hover:opacity-80"><Stat label="Following" value={String(stats.following)} /></button> : <div title="Following list is private"><Stat label="Following" value={String(stats.following)} /></div>}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!isOwnProfile && <ProfileFollowButton isAuthenticated={isAuthenticated} isFollowing={isFollowing} requestPending={requestPending} isPending={toggleFollowMutation.isPending} onFollow={handleFollow} onLogin={onLogin} />}
+              {!isOwnProfile && isAuthenticated && <ProfileMessageButton user={targetUser} onOpen={onOpenMessage} />}
+              <button onClick={onTip} className="rounded-xl border border-border px-4 py-2.5 text-xs font-semibold transition-colors hover:bg-muted" style={{ borderColor: `${themeColor}40` }}>Tip creator</button>
+            </div>
           </div>
         </div>
       </div>

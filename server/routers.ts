@@ -342,14 +342,16 @@ export const appRouter = router({
     geminiChat: adminOnly.input(z.object({ messages: z.array(z.object({ role: z.enum(["user", "model"]), content: z.string() })) })).mutation(async ({ input }) => {
       const emailSettings = await db.getEmailDeliverySettings();
       const mediaPolicy = await db.getMediaUploadPolicy();
-      const currentSettings = { ...emailSettings, ...mediaPolicy };
+      const platformSettings = await db.getPlatformSettings();
+      const currentSettings = { ...emailSettings, ...mediaPolicy, ...platformSettings };
       const content = await generateGeminiChatReply(input.messages.map(m => ({ role: m.role === "model" ? "assistant" as const : "user" as const, content: m.content })), currentSettings);
       return { content };
     }),
     geminiApplySafeActions: adminOnly.input(z.any()).mutation(async ({ ctx, input }) => {
       const emailSettings = await db.getEmailDeliverySettings();
       const mediaPolicy = await db.getMediaUploadPolicy();
-      const currentSettings = { ...emailSettings, ...mediaPolicy };
+      const platformSettings = await db.getPlatformSettings();
+      const currentSettings = { ...emailSettings, ...mediaPolicy, ...platformSettings };
       const next = await applySafeGeminiActions(input, currentSettings);
       await db.setEmailDeliverySettings({
         emailDeliveryEnabled: next.emailDeliveryEnabled,
@@ -362,7 +364,10 @@ export const appRouter = router({
         profilePhotosEnabled: next.profilePhotosEnabled,
         videosEnabled: next.videosEnabled
       }, ctx.user.id);
-      return { applied: true };
+      if ((next as any).eventTheme !== undefined) {
+        await db.setPlatformSetting({ eventTheme: (next as any).eventTheme }, ctx.user.id);
+      }
+      return { success: true };
     }),
   }),
   posts: router({

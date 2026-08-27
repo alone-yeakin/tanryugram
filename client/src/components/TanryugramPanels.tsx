@@ -118,7 +118,9 @@ export function AdminView({ onTip }: { onTip: () => void }) {
               const nextMessages = [...geminiChatMessages, { role: "user" as const, content }];
               setGeminiChatMessages(nextMessages);
               try {
-                const reply = await geminiChatMutation.mutateAsync({ messages: nextMessages.map(m => ({ role: m.role === "assistant" ? "model" as const : "user" as const, content: m.content })) });
+                const reply = await geminiChatMutation.mutateAsync({ 
+                  messages: nextMessages.map(m => ({ role: m.role === "assistant" ? "model" as const : "user" as const, content: m.content })),
+                });
                 setGeminiChatMessages([...nextMessages, { role: "assistant", content: reply.content }]);
                 if ((reply as any).proposal) {
                   toast.info("The assistant has generated a platform improvement proposal.", {
@@ -490,12 +492,16 @@ export function AccountSettings({ user, onClose }: { user: any; onClose: () => v
               {["blue", "black", "gold", "vip", "founder", "legend"].map((type) => {
                 const setting = marketplaceQuery.data?.marketplace.find((s: any) => s.badgeType === type);
                 const isOwned = user?.badgeType === type || user?.secondaryBadgeType === type;
+                const canApply = !isOwned && (
+                  type === "blue" ? user?.badgeType !== "blue" : 
+                  (user?.badgeType === "blue" ? user?.secondaryBadgeType === "none" : user?.badgeType === "none")
+                );
                 return (
-                  <button key={type} onClick={() => setRequestedBadge(type as any)} className={`flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition ${requestedBadge === type ? "border-violet-500 bg-violet-500/10" : "border-border bg-muted/40"} ${isOwned ? "opacity-50 grayscale" : ""}`}>
+                  <button key={type} disabled={!canApply || isOwned} onClick={() => setRequestedBadge(type as any)} className={`flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition ${requestedBadge === type ? "border-violet-500 bg-violet-500/10" : "border-border bg-muted/40"} ${isOwned ? "opacity-50 grayscale" : !canApply ? "opacity-30 cursor-not-allowed" : "hover:border-violet-300"}`}>
                     <ProfileBadge type={type as any} />
                     <span className="text-xs font-bold uppercase tracking-wider">{type}</span>
                     <span className="text-[10px] font-medium text-muted-foreground">{setting?.isPaid ? `$${setting.price}` : "Free"}</span>
-                    {isOwned && <span className="text-[9px] font-bold text-emerald-600">OWNED</span>}
+                    {isOwned ? <span className="text-[9px] font-bold text-emerald-600">OWNED</span> : !canApply && <span className="text-[9px] font-bold text-rose-500 uppercase">Slot Full</span>}
                   </button>
                 );
               })}
