@@ -76,6 +76,10 @@ export const toPublicPostFeedRows = (rows: unknown) => {
   });
 };
 
+export const hasNativePassword = (user: { passwordHash?: string | null }) => Boolean(user.passwordHash?.trim());
+
+export const requiresEmailVerification = (existingAccountCount: number, verificationCode?: string | null) => existingAccountCount > 0 && !verificationCode?.trim();
+
 export const isVerificationCodeValid = (record: { expiresAt: Date | string } | undefined, now = new Date()) => Boolean(record && now <= new Date(record.expiresAt));
 
 export const appRouter = router({

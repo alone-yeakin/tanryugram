@@ -613,3 +613,30 @@
 
 - [x] Production startup crash follow-up: reproduce the remaining undefined-id error on the published mobile route — the sandbox session currently reaches the native email/password login screen, so the failing branch is likely authenticated or data-dependent
 
+
+- [x] Public auth regression: stop protected tRPC queries from running when no user session exists — protected startup queries are session-gated
+- [x] Database startup regression: register Drizzle relations and replace the incompatible public-feed relational query with a portable explicit query; marketplace RPC returns HTTP 200
+- [x] Public auth validation: unauthenticated live route, code-level protected-query guards, and focused auth/startup tests verified; an authenticated owner browser session was unavailable in this sandbox
+
+- [x] Public auth regression: stop protected tRPC queries from running when no user session exists — StoryBarLive now gates `stories.list`; current logged-out mobile preview renders the login screen and the browser console is clean
+
+- [x] Public discovery feed regression: replace the failing relational post query with an explicit portable query that preserves sanitized post, creator, and media rows
+- [x] Public discovery feed validation: add a focused regression contract, run TypeScript/tests/build, and publish the final repair
+- [x] Final release validation: marketplace RPC, discovery feed RPC, unauthenticated login route, and code-level authenticated contracts verified; authenticated owner visual session was unavailable in this sandbox
+- [ ] User handoff: provide the live checkpoint and ask the user to clear mobile browser/app cache and retest
+
+- [x] External provider note: Brevo IP-allowlist smoke test remains provider-dependent and is not a code regression
+
+- [x] Current session: harden feed and startup query failures after live RPC smoke test
+- [ ] Current session: save and publish final checkpoint after all validation
+- [ ] Current session: deliver concise verification results and mobile retest request to the user
+
+- [x] Live discovery smoke test reproduced a separate SQL failure after relation metadata fix; implemented explicit select fallback without changing media storage paths
+
+- [x] Final validation: marketplace settings returns valid JSON, discovery feed returns HTTP 200, and public login route is clean
+
+- [ ] Release handoff: attach checkpoint version and request mobile cache-cleared retest
+
+- [ ] Session completion: reconcile all current session items before checkpoint
+- [x] Restore native-auth helper exports required by the existing auth session regression contract
+- [x] Re-run the repaired-path tests after restoring native-auth helpers — 5 files and 14 tests passed

@@ -24,7 +24,8 @@ function dataUrl(file: Blob) {
 }
 
 export function StoryBarLive({ onOpen }: { onOpen: (story: any, allStories?: any[]) => void }) {
-  const storyQuery = trpc.stories.list.useQuery();
+  const { isAuthenticated } = useAuth();
+  const storyQuery = trpc.stories.list.useQuery(undefined, { enabled: isAuthenticated });
   const upload = trpc.media.uploadBase64.useMutation();
   const policyQuery = trpc.media.policy.useQuery();
   const create = trpc.stories.create.useMutation();

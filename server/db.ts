@@ -2,18 +2,21 @@ import { drizzle, MySql2Database } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import { eq, and, or, ne, desc, asc, sql, inArray, count, like } from "drizzle-orm";
 import * as schema from "../drizzle/schema";
+import * as relationSchema from "../drizzle/relations";
 import { users, posts, postMedia, postReactions, comments, follows, followRequests, groups, groupMembers, groupMessages, groupJoinRequests, groupPolls, groupPollOptions, groupPollVotes, groupEvents, groupEventRsvps, groupAuditEvents, userSettings, conversationSettings, typingStatus, likes, mediaUploadPolicy, emailDeliverySettings, recoverySupportSettings, recoverySupportRequests, groupInviteRequests, recoverySupportMessages, messageHidden, messageReactions, messages, notifications, privateOwnerFollowers, badgeApplications, pushTokens, saves, stories, storyViews, subscriptions, tips, userMediaPermissions, contentReports, reelSubmissions, reelLikes, reelViews, reelBookmarks, reelComments, reelCommentLikes, dailyReelAnalytics, reelPromotions, contentAppeals, contentReportRateLimits, moderationAuditLog, platformPaymentSettings, badgeMarketplaceSettings, userBadges, platformSettings, type InsertPost, type InsertUser } from "../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 
+const drizzleSchema = { ...schema, ...relationSchema };
+
 let connection: mysql.Connection | null = null;
-let dbInstance: MySql2Database<typeof schema> | null = null;
+let dbInstance: MySql2Database<typeof drizzleSchema> | null = null;
 
 export async function getDb() {
   const url = process.env.DATABASE_URL;
   if (!url) return null;
   if (!connection) {
     connection = await mysql.createConnection(url);
-    dbInstance = drizzle(connection, { schema, mode: "default" });
+    dbInstance = drizzle(connection, { schema: drizzleSchema, mode: "default" });
   }
   return dbInstance;
 }
@@ -226,13 +229,44 @@ export async function setBadgeMarketplaceSetting(badgeType: "blue" | "black" | "
 
 // --- Content & Reels Helpers ---
 
+export function attachPostRelations(
+  postRows: (typeof posts.$inferSelect)[],
+  userRows: (typeof users.$inferSelect)[],
+  mediaRows: (typeof postMedia.$inferSelect)[],
+) {
+  const usersById = new Map(userRows.map((user) => [user.id, user]));
+  const mediaByPostId = new Map<number, (typeof mediaRows)>();
+  for (const media of mediaRows) {
+    const existing = mediaByPostId.get(media.postId) ?? [];
+    existing.push(media);
+    mediaByPostId.set(media.postId, existing);
+  }
+
+  return postRows.map((post) => ({
+    ...post,
+    user: usersById.get(post.userId) ?? null,
+    media: mediaByPostId.get(post.id) ?? [],
+  }));
+}
+
 export async function getPosts() {
   const db = await getDb();
   if (!db) return [];
-  return db.query.posts.findMany({
-    with: { user: true, media: true },
-    orderBy: [desc(posts.createdAt)],
-  });
+
+  // Avoid Drizzle's relational JSON/LATERAL query here. Some deployed MySQL-compatible
+  // runtimes reject that generated SQL even though the underlying tables are healthy.
+  // Explicit batched selects keep the public feed portable and retain the same contract.
+  const postRows = await db.select().from(posts).orderBy(desc(posts.createdAt));
+  if (!postRows.length) return [];
+
+  const postIds = postRows.map((post) => post.id);
+  const userIds = Array.from(new Set(postRows.map((post) => post.userId).filter((id): id is number => Number.isFinite(id))));
+  const [mediaRows, userRows] = await Promise.all([
+    postIds.length ? db.select().from(postMedia).where(inArray(postMedia.postId, postIds)).orderBy(asc(postMedia.sortOrder)) : Promise.resolve([]),
+    userIds.length ? db.select().from(users).where(inArray(users.id, userIds)) : Promise.resolve([]),
+  ]);
+
+  return attachPostRelations(postRows, userRows, mediaRows);
 }
 
 export async function deletePostAsUser(postId: number, userId: number, isAdmin: boolean) {
