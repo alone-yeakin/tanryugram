@@ -76,6 +76,37 @@ function PostCard({ post, liked, saved, onLike, onSave, onComment, onOpenComment
   return <article className="overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-sm transition-shadow duration-300 hover:shadow-xl hover:shadow-violet-500/5"><div className="flex items-center justify-between px-4 py-4 sm:px-5"><div className="flex items-center gap-3 cursor-pointer group" onClick={() => onSelectUser(creatorUser)}><Avatar src={post.creator.avatar} size="sm" name={post.creator.name} /><div><div className="flex items-center gap-1.5"><span className="text-sm font-semibold group-hover:text-violet-500 transition">{post.creator.name}</span>{(post.creator as any).showBadge !== false && <ProfileBadge badgeType={(post.creator as any).badgeType} legacyVerified={post.creator.verified} label={(post.creator as any).badgeLabel} />}</div><p className="text-[11px] text-muted-foreground">@{post.creator.username} · {post.creator.role}</p></div></div><button type="button" onClick={onReport} aria-label="Report post" className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"><Flag className="h-4 w-4" /></button></div><PostMediaCarousel post={post} /><div className="p-4 sm:p-5"><div className="mb-3 flex items-center justify-between"><div className="flex items-center gap-1"><ReactionButton postId={post.id} liked={liked} onLike={onLike} /><span className="mr-2 text-xs font-semibold tabular-nums">{(post.likes + (liked ? 1 : 0)).toLocaleString()}</span><button onClick={onOpenComments} className="flex items-center gap-1.5 rounded-full p-2 text-foreground hover:bg-violet-500/10 hover:text-violet-500"><MessageCircle className="h-[19px] w-[19px]" /><span className="text-xs font-semibold tabular-nums">{post.comments}</span></button></div><button onClick={onSave} className={`rounded-full p-2 transition-colors ${saved ? "text-violet-500" : "text-foreground hover:bg-violet-500/10 hover:text-violet-500"}`}><Bookmark className={`h-[19px] w-[19px] ${saved ? "fill-current" : ""}`} /></button></div><p className="text-sm leading-6 text-foreground"><span className="mr-2 font-semibold">@{post.creator.username}</span>{post.caption}</p><div className="mt-2 text-[11px] font-medium text-muted-foreground">{post.time}</div>{post.premium && <button onClick={onSubscribe} className="mt-4 flex w-full items-center justify-between rounded-2xl bg-violet-500/10 px-4 py-3 text-left text-xs font-semibold text-violet-600 transition-colors hover:bg-violet-500/15 dark:text-violet-300"><span><Sparkles className="mr-2 inline h-4 w-4" />Unlock the full process</span><span>$4.99 / month <ChevronRight className="ml-1 inline h-3 w-3" /></span></button>}<div onClick={onOpenComments} className="mt-4 flex cursor-pointer items-center justify-between border-t border-border/60 pt-3 text-muted-foreground hover:text-foreground"><span className="text-xs">View all comments...</span><MessageCircle className="h-4 w-4 text-violet-500" /></div></div></article>;
 }
 
+function normalizeFeedPosts(rows: unknown, time: string, tag: string) {
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((row: any) => {
+    const post = row?.post ?? row;
+    if (!post || !Number.isFinite(Number(post.id))) return [];
+    const creator = row?.creator ?? row?.user ?? {};
+    return [{
+      id: Number(post.id),
+      userId: Number(post.userId || creator.id || 0),
+      creator: {
+        userId: Number(post.userId || creator.id || 0),
+        name: creator.name || "Tanryugram creator",
+        username: creator.username || `creator-${post.userId || creator.id || "member"}`,
+        avatar: creator.avatarUrl || null,
+        verified: Boolean(creator.isVerified),
+        badgeType: creator.badgeType,
+        badgeLabel: creator.badgeLabel,
+        showBadge: creator.showBadge,
+        role: creator.badgeLabel || (creator.isCreator ? "Creator" : "Member"),
+      },
+      media: post.mediaUrl || post.media?.[0]?.mediaUrl || null,
+      caption: post.caption || "",
+      likes: Number(post.likesCount || 0),
+      comments: Number(post.commentsCount || 0),
+      time,
+      tag: post.isPremium ? "PREMIUM" : tag,
+      premium: Boolean(post.isPremium),
+    }];
+  });
+}
+
 export default function Home() {
   const { user, isAuthenticated, loading: authLoading, sessionExpired, logout } = useAuth();
   const openNativeLogin = () => toast.info("Sign in with your TanRyuGram email and password.");
@@ -110,7 +141,7 @@ export default function Home() {
   const markNotificationsReadMutation = trpc.notifications.markRead.useMutation();
   const registerPushTokenMutation = trpc.notifications.registerPushToken.useMutation();
   const marketplaceQuery = trpc.marketplace.getSettings.useQuery();
-  const eventTheme = marketplaceQuery.data?.platform.eventTheme;
+  const eventTheme = marketplaceQuery.data?.platform?.eventTheme ?? null;
   const incomingCallsQuery = trpc.messages.incomingCalls.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 1200 });
   const recentCallsQuery = trpc.messages.recentCalls.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000 });
   const globalCallUpdateMutation = trpc.messages.updateCall.useMutation({ onSuccess: () => incomingCallsQuery.refetch() });
@@ -176,9 +207,9 @@ export default function Home() {
     return () => { active = false; void removeRegistrationListener?.(); };
   }, [isAuthenticated, registerPushTokenMutation]);
   // Payment mutations removed for beta stability
-  const realPosts = feed.data?.map((row: any) => { const creator = row.creator || {}; return { id: row.post.id, userId: row.post.userId, creator: { userId: row.post.userId, name: creator.name || "Tanryugram creator", username: creator.username || `creator-${row.post.userId}`, avatar: creator.avatarUrl || null, verified: Boolean(creator.isVerified), badgeType: creator.badgeType, badgeLabel: creator.badgeLabel, showBadge: creator.showBadge, role: creator.badgeLabel || (creator.isCreator ? "Creator" : "Member") }, media: row.post.mediaUrl, caption: row.post.caption || "", likes: row.post.likesCount, comments: row.post.commentsCount, time: "Recently", tag: row.post.isPremium ? "PREMIUM" : "FROM THE COMMUNITY", premium: row.post.isPremium }; }) || [];
+  const realPosts = normalizeFeedPosts(feed.data, "Recently", "FROM THE COMMUNITY");
   const posts = realPosts.length ? realPosts : fallbackPosts;
-  const realExplore = explore.data?.map((row: any) => { const creator = row.creator || {}; return { id: row.post.id, userId: row.post.userId, creator: { userId: row.post.userId, name: creator.name || "Tanryugram creator", username: creator.username || `creator-${row.post.userId}`, avatar: creator.avatarUrl || null, verified: Boolean(creator.isVerified), badgeType: creator.badgeType, badgeLabel: creator.badgeLabel, showBadge: creator.showBadge, role: creator.badgeLabel || (creator.isCreator ? "Creator" : "Member") }, media: row.post.mediaUrl, caption: row.post.caption || "", likes: row.post.likesCount, comments: row.post.commentsCount, time: "Trending now", tag: "EXPLORE", premium: row.post.isPremium }; }) || [];
+  const realExplore = normalizeFeedPosts(explore.data, "Trending now", "EXPLORE");
   const displayedPosts = view === "explore" && realExplore.length ? realExplore : posts;
   const creators = fallbackCreators;
   const unreadCount = isAuthenticated ? Number(unreadNotificationsQuery.data ?? 0) : 0;

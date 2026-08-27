@@ -59,6 +59,23 @@ export const sanitizeAuthUser = (user: any) => {
   return { ...safeUser, isOwner: isTanryugramOwner(user) };
 };
 
+/**
+ * The database query returns a post record with `user` and `media` relations,
+ * while social-feed clients use an explicit `{ post, creator }` contract.
+ * Normalize here, reject malformed rows, and ensure password hashes never
+ * leave the server through a public feed response.
+ */
+export const toPublicPostFeedRows = (rows: unknown) => {
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((row: any) => {
+    const post = row?.post ?? row;
+    if (!post || !Number.isFinite(Number(post.id))) return [];
+    const { user: rawUser, creator: rawCreator, ...postFields } = post;
+    const creator = rawCreator ?? row?.creator ?? rawUser ?? row?.user ?? null;
+    return [{ post: postFields, creator: sanitizeAuthUser(creator) }];
+  });
+};
+
 export const isVerificationCodeValid = (record: { expiresAt: Date | string } | undefined, now = new Date()) => Boolean(record && now <= new Date(record.expiresAt));
 
 export const appRouter = router({
@@ -505,8 +522,8 @@ export const appRouter = router({
     }),
   }),
   discovery: router({
-    feed: publicProcedure.input(z.object({ limit: z.number().optional(), offset: z.number().optional() }).optional()).query(async () => await db.getPosts()),
-    explore: publicProcedure.query(async () => await db.getPosts()),
+    feed: publicProcedure.input(z.object({ limit: z.number().optional(), offset: z.number().optional() }).optional()).query(async () => toPublicPostFeedRows(await db.getPosts())),
+    explore: publicProcedure.query(async () => toPublicPostFeedRows(await db.getPosts())),
     search: publicProcedure.input(z.object({ query: z.string() })).query(async ({ input }) => {
       const database = await db.getDb();
       if (!database) return { users: [], posts: [] };

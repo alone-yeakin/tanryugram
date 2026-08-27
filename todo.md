@@ -604,3 +604,5 @@
 - [x] Premium Messaging: Overhaul group message UI with better layouts, transitions, and status indicators
 - [x] Platform Settings: Add owner-managed payment contact instructions for PayPal, bKash, and Nagad
 - [x] Creator Studio: Add manual approval workflow for paid badge requests
+- [x] Production crash repair: trace and fix the mobile website error caused by reading an identifier from unavailable data
+- [x] Production crash validation: add a regression test, verify the mobile route, and publish the repair
