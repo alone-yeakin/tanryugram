@@ -682,3 +682,11 @@
 - [x] Improve password-reset flow with loading animations and clear status feedback
 - [x] Run focused regression tests, TypeScript, production build, and smoke-check critical routes
 - [x] Save and publish the hardened release checkpoint
+
+## Messenger Peer-List Repair
+
+- [x] Repair the Messenger peer-list query to use a portable lookup instead of computed grouping
+- [x] Add regression coverage for the `messages.peers` procedure
+- [x] Run focused tests, TypeScript, production build, and authenticated route validation
+- [x] Save and publish the final stable checkpoint
+- [x] Deliver release report and request mobile/browser cache-cleared retest

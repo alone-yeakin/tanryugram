@@ -642,8 +642,13 @@ export const appRouter = router({
       if (!database) return [];
       
       // Get all unique peers the user has messaged with
-      const peerIdsRes = await database.select({ peerId: sql<number>`CASE WHEN ${messages.senderId} = ${ctx.user.id} THEN ${messages.receiverId} ELSE ${messages.senderId} END` }).from(messages).where(or(eq(messages.senderId, ctx.user.id), eq(messages.receiverId, ctx.user.id))).groupBy(sql`peerId`);
-      const peerIds = peerIdsRes.map(r => r.peerId);
+      const sentTo = await database.select({ id: messages.receiverId }).from(messages).where(eq(messages.senderId, ctx.user.id)).groupBy(messages.receiverId);
+      const receivedFrom = await database.select({ id: messages.senderId }).from(messages).where(eq(messages.receiverId, ctx.user.id)).groupBy(messages.senderId);
+      
+      const peerIds = Array.from(new Set([
+        ...sentTo.map(r => r.id),
+        ...receivedFrom.map(r => r.id)
+      ])).filter(id => id !== ctx.user.id);
       if (!peerIds.length) return [];
 
       const results = [];
