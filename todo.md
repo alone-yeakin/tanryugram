@@ -720,11 +720,22 @@
 
 ## Messenger Interaction & Theme Enhancements (Current Session)
 
-- [ ] Implement a reliable live typing indicator for direct Messenger chats
-- [ ] Implement clear read-receipt state and mark incoming messages read while viewing a chat
-- [ ] Add or polish an accessible dark-mode toggle in the primary navigation bar
-- [ ] Add regression tests for typing/read receipts and theme-toggle behavior
-- [ ] Run TypeScript, Vitest, production build, and responsive visual verification
-- [ ] Save and publish the verified checkpoint
-- [ ] Deliver the updated release checkpoint and retest guidance
+- [x] Implement a reliable live typing indicator for direct Messenger chats
+- [x] Implement clear read-receipt state and mark incoming messages read while viewing a chat
+- [x] Add or polish an accessible dark-mode toggle in the primary navigation bar
+- [x] Add regression tests for typing/read receipts and theme-toggle behavior
+- [x] Run TypeScript, Vitest, production build, and responsive visual verification
+- [x] Save and publish the verified checkpoint
+- [x] Deliver the updated release checkpoint and retest guidance
+
+
+## Call Audio & Hang-up Repair (Current Session)
+
+- [x] Inspect current WebRTC media setup, polling, and call status transitions
+- [x] Repair silent or delayed call audio setup and improve connection-state feedback
+- [x] Propagate remote hang-up state so both call screens close promptly
+- [x] Add regression coverage for audio setup and remote hang-up transitions
+- [x] Run TypeScript, focused tests, production build, and call UI verification
+- [ ] Save and publish the verified call repair checkpoint
+- [ ] Deliver the updated call repair and mobile retest guidance
 

@@ -1014,25 +1014,28 @@ export const appRouter = router({
         peer: r.call.callerId === ctx.user.id ? sanitizeAuthUser(r.receiver) : sanitizeAuthUser(r.caller)
       }));
     }),
-    updateCall: protectedProcedure.input(z.object({ callId: z.number(), status: z.enum(["accepted", "declined", "missed", "ended"]), durationSeconds: z.number().optional() })).mutation(async ({ input }) => {
+    updateCall: protectedProcedure.input(z.object({ callId: z.number(), status: z.enum(["accepted", "declined", "missed", "ended"]), durationSeconds: z.number().optional() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [call] = await database.select({ id: calls.id }).from(calls).where(and(eq(calls.id, input.callId), or(eq(calls.callerId, ctx.user.id), eq(calls.receiverId, ctx.user.id))));
+      if (!call) throw new TRPCError({ code: "NOT_FOUND", message: "Call not found or access denied." });
       await database.update(calls).set({ status: input.status, endedAt: input.status === "ended" ? new Date() : undefined, durationSeconds: input.durationSeconds }).where(eq(calls.id, input.callId));
+      return { success: true };
     }),
     settingsUpdate: protectedProcedure.input(z.object({ peerId: z.number(), isPinned: z.boolean().optional(), isArchived: z.boolean().optional(), isMuted: z.boolean().optional(), themeColor: z.string().optional(), nickname: z.string().nullable().optional() })).mutation(async ({ ctx, input }) => {
       const { peerId, ...settings } = input;
       await db.updateConversationSettings(ctx.user.id, peerId, settings);
     }),
-    getCall: protectedProcedure.input(z.object({ callId: z.number() })).query(async ({ input }) => {
+    getCall: protectedProcedure.input(z.object({ callId: z.number() })).query(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [call] = await database.select().from(calls).where(eq(calls.id, input.callId));
+      const [call] = await database.select().from(calls).where(and(eq(calls.id, input.callId), or(eq(calls.callerId, ctx.user.id), eq(calls.receiverId, ctx.user.id))));
       return call || null;
     }),
-    signal: protectedProcedure.input(z.object({ callId: z.number(), signalData: z.string() })).mutation(async ({ input }) => {
+    signal: protectedProcedure.input(z.object({ callId: z.number(), signalData: z.string() })).mutation(async ({ ctx, input }) => {
       const database = await db.getDb();
       if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await database.update(calls).set({ signalData: input.signalData }).where(eq(calls.id, input.callId));
+      await database.update(calls).set({ signalData: input.signalData }).where(and(eq(calls.id, input.callId), or(eq(calls.callerId, ctx.user.id), eq(calls.receiverId, ctx.user.id))));
     }),
   }),
   stories: router({

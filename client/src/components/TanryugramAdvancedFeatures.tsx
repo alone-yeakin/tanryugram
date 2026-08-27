@@ -17,6 +17,29 @@ function dataUrl(file: Blob) {
   });
 }
 
+type CallConnectionState = "preparing" | "connecting" | "connected" | "reconnecting" | "failed";
+
+function waitForIceGathering(peerConnection: RTCPeerConnection, timeoutMs = 1800) {
+  return new Promise<void>((resolve) => {
+    if (peerConnection.iceGatheringState === "complete") {
+      resolve();
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      peerConnection.removeEventListener("icegatheringstatechange", onStateChange);
+      resolve();
+    }, timeoutMs);
+    const onStateChange = () => {
+      if (peerConnection.iceGatheringState === "complete") {
+        window.clearTimeout(timer);
+        peerConnection.removeEventListener("icegatheringstatechange", onStateChange);
+        resolve();
+      }
+    };
+    peerConnection.addEventListener("icegatheringstatechange", onStateChange);
+  });
+}
+
 export function StoryBarLive({ onOpen }: { onOpen: (story: any, allStories?: any[]) => void }) {
   const { user, isAuthenticated } = useAuth();
   const storyQuery = trpc.stories.list.useQuery(undefined, { enabled: isAuthenticated });
@@ -218,6 +241,8 @@ export function CallOverlay({ callId, callType, isCaller, peer, onClose, onCallA
   const [ending, setEnding] = useState(false);
   const [showEnded, setShowEnded] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [connectionState, setConnectionState] = useState<CallConnectionState>("preparing");
+  const [audioReady, setAudioReady] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
@@ -239,22 +264,44 @@ export function CallOverlay({ callId, callType, isCaller, peer, onClose, onCallA
         return;
       }
       try {
+        setConnectionState("preparing");
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
           video: callType === "video" ? { facingMode: "user" } : false,
         });
         if (cancelled) return;
         streamRef.current = stream;
         if (localVideo.current) localVideo.current.srcObject = stream;
-        const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"] }] });
         pcRef.current = pc;
+        setConnectionState("connecting");
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === "connected") setConnectionState("connected");
+          else if (pc.connectionState === "connecting") setConnectionState("connecting");
+          else if (pc.connectionState === "disconnected") setConnectionState("reconnecting");
+          else if (pc.connectionState === "failed") setConnectionState("failed");
+        };
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") setConnectionState("connected");
+          else if (pc.iceConnectionState === "checking") setConnectionState("connecting");
+          else if (pc.iceConnectionState === "disconnected") setConnectionState("reconnecting");
+          else if (pc.iceConnectionState === "failed") setConnectionState("failed");
+        };
         stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-        pc.ontrack = (event) => { if (remoteVideo.current) remoteVideo.current.srcObject = event.streams[0]; if (remoteAudio.current) remoteAudio.current.srcObject = event.streams[0]; };
+        pc.ontrack = (event) => {
+          const remoteStream = event.streams[0];
+          if (!remoteStream) return;
+          if (remoteVideo.current) remoteVideo.current.srcObject = remoteStream;
+          if (remoteAudio.current) {
+            remoteAudio.current.srcObject = remoteStream;
+            remoteAudio.current.play().then(() => setAudioReady(true)).catch(() => setAudioReady(false));
+          }
+        };
         pc.onicecandidate = () => { /* candidates are included after ICE gathering below */ };
         if (isCaller) {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          await new Promise<void>((resolve) => { if (pc.iceGatheringState === "complete") resolve(); else { const handler = () => { if (pc.iceGatheringState === "complete") { pc.removeEventListener("icegatheringstatechange", handler); resolve(); } }; pc.addEventListener("icegatheringstatechange", handler); window.setTimeout(resolve, 4000); } });
+          await waitForIceGathering(pc);
           await signal.mutateAsync({ callId, signalData: JSON.stringify({ kind: "offer", description: pc.localDescription }) });
         }
       } catch (error: any) {
@@ -275,12 +322,13 @@ export function CallOverlay({ callId, callType, isCaller, peer, onClose, onCallA
     const consume = async () => {
       const data = JSON.parse(payload);
       if (!isCaller && data.kind === "offer") {
-        await pcRef.current?.setRemoteDescription(data.description);
-        const answer = await pcRef.current?.createAnswer();
-        if (!answer) return;
-        await pcRef.current?.setLocalDescription(answer);
-        await new Promise<void>((resolve) => { if (pcRef.current?.iceGatheringState === "complete") resolve(); else { const handler = () => { if (pcRef.current?.iceGatheringState === "complete") { pcRef.current.removeEventListener("icegatheringstatechange", handler); resolve(); } }; pcRef.current?.addEventListener("icegatheringstatechange", handler); window.setTimeout(resolve, 4000); } });
-        await signal.mutateAsync({ callId, signalData: JSON.stringify({ kind: "answer", description: pcRef.current?.localDescription }) });
+        const peerConnection = pcRef.current;
+        if (!peerConnection) return;
+        await peerConnection.setRemoteDescription(data.description);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        await waitForIceGathering(peerConnection);
+        await signal.mutateAsync({ callId, signalData: JSON.stringify({ kind: "answer", description: peerConnection.localDescription }) });
       } else if (isCaller && data.kind === "answer") {
         await pcRef.current?.setRemoteDescription(data.description);
       }
@@ -289,21 +337,38 @@ export function CallOverlay({ callId, callType, isCaller, peer, onClose, onCallA
   }, [callQuery.data?.signalData, callId, isCaller]);
 
   const cleanupMedia = () => { streamRef.current?.getTracks().forEach((track) => track.stop()); pcRef.current?.close(); streamRef.current = null; pcRef.current = null; };
+  useEffect(() => {
+    const status = callQuery.data?.status;
+    if (!status || status === "pending" || status === "accepted" || ending) return;
+    cleanupMedia();
+    onClose();
+  }, [callQuery.data?.status, ending, onClose]);
   useEffect(() => { if (callQuery.data?.status === "accepted") setMuted(false); }, [callQuery.data?.status]);
   useEffect(() => { if (callQuery.data?.status !== "pending" && callQuery.data?.status !== "declined" && callQuery.data?.status !== "ended" && callQuery.data?.status !== "missed") { const timer = window.setInterval(() => setElapsed((value) => value + 1), 1000); return () => window.clearInterval(timer); } return undefined; }, [callQuery.data?.status]);
 
-  const end = async () => { setEnding(true); cleanupMedia(); await updateCall.mutateAsync({ callId, status: "ended", durationSeconds: elapsed }).catch(() => undefined); setShowEnded(true); };
-  const toggleSpeaker = async () => { setSpeaker(!speaker); };
+  const end = async () => {
+    if (ending) return;
+    setEnding(true);
+    cleanupMedia();
+    setShowEnded(true);
+    await updateCall.mutateAsync({ callId, status: "ended", durationSeconds: elapsed }).catch(() => undefined);
+  };
+  const toggleSpeaker = () => {
+    const next = !speaker;
+    setSpeaker(next);
+    if (remoteAudio.current) remoteAudio.current.volume = next ? 1 : 0;
+  };
   const toggleVideo = () => { setVideoEnabled(!videoEnabled); streamRef.current?.getVideoTracks().forEach((track) => track.enabled = !videoEnabled); };
   const flipCamera = () => { setFacingMode(facingMode === "user" ? "environment" : "user"); };
   const togglePictureInPicture = async () => { if (localVideo.current) await localVideo.current.requestPictureInPicture().catch(() => undefined); };
 
   const peerName = peer?.name || peer?.username || "Tanryugram member";
   const peerAvatar = peer?.avatarUrl || null;
+  const connectionLabel = mediaError ? "Audio unavailable" : connectionState === "connected" ? `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}` : connectionState === "reconnecting" ? "Reconnecting…" : connectionState === "failed" ? "Connection failed" : isCaller && callQuery.data?.status === "pending" ? "Calling…" : callQuery.data?.status === "pending" ? "Connecting…" : "Connecting audio…";
 
   if (showEnded) return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-zinc-950 p-6 text-center text-white"><div className="w-full max-w-sm space-y-6"><div className="mx-auto h-20 w-20 overflow-hidden rounded-full bg-white/10"><SafeImage src={peerAvatar} fallbackName={peerName} alt={peerName} className="h-full w-full object-cover" /></div><h2 className="text-2xl font-bold">Call ended</h2><p className="text-white/60">Duration: {Math.floor(elapsed / 60)}m {elapsed % 60}s</p><div className="flex flex-col gap-3 pt-4"><button onClick={onCallAgain} className="rounded-2xl bg-violet-500 py-3 text-sm font-semibold transition hover:bg-violet-600">Call again</button><button onClick={onClose} className="rounded-2xl bg-white/10 py-3 text-sm font-semibold transition hover:bg-white/20">Close</button></div></div></div>;
 
-  return <div className="safe-area-x fixed inset-0 z-[80] flex items-center justify-center bg-zinc-950 text-white"><audio ref={remoteAudio} autoPlay playsInline className="hidden" /><div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-violet-950 via-zinc-950 to-black p-6 pb-[max(1.5rem,var(--tanry-safe-bottom))] text-center shadow-2xl">{callType === "video" && <><video ref={remoteVideo} autoPlay playsInline className="absolute inset-0 h-full w-full object-cover opacity-80" /><video ref={localVideo} autoPlay muted playsInline className="absolute right-4 top-4 h-32 w-24 rounded-2xl border border-white/30 object-cover" /></>}<div className="relative z-10"><div className="mx-auto mb-5 h-28 w-28 overflow-hidden rounded-full bg-white/15 ring-8 ring-white/5"><SafeImage src={peerAvatar} fallbackName={peerName} alt={peerName} className="h-full w-full object-cover" /></div><p className="text-2xl font-semibold">{peerName}</p><p className="mt-2 text-sm text-white/60">{isCaller && callQuery.data?.status === "pending" ? "Calling…" : callQuery.data?.status === "pending" ? "Connecting…" : `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`}</p><div className="mx-auto mt-6 flex items-center justify-center gap-1.5 opacity-60"><span className="h-2 w-2 animate-pulse rounded-full bg-violet-300" /><span className="h-3 w-3 animate-pulse rounded-full bg-violet-300 [animation-delay:120ms]" /><span className="h-2 w-2 animate-pulse rounded-full bg-violet-300 [animation-delay:240ms]" /></div></div><div data-mobile-call-bar className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-center gap-3 px-4 pt-3"><button onClick={() => setMuted((value) => { const next = !value; streamRef.current?.getAudioTracks().forEach((track) => track.enabled = !next); return next; })} className={`rounded-full p-4 ${muted ? "bg-rose-500/80" : "bg-white/15"}`} title="Mute microphone">{muted ? <VolumeX className="h-5 w-5" /> : <Mic className="h-5 w-5" />}</button><button onClick={() => void toggleSpeaker()} className="rounded-full bg-white/15 p-4" title="Toggle speaker output">{speaker ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}</button>{callType === "video" && <><button onClick={toggleVideo} className={`rounded-full p-4 ${videoEnabled ? "bg-white/15" : "bg-rose-500/80"}`} title="Toggle video"><Video className="h-5 w-5" /></button><button onClick={flipCamera} className="rounded-full bg-white/15 p-4" title="Flip camera"><Camera className="h-5 w-5" /></button><button onClick={() => void togglePictureInPicture()} className="rounded-full bg-white/15 p-4" title="Picture in picture"><PictureInPicture className="h-5 w-5" /></button></>}<button disabled={ending} onClick={() => void end()} className="rounded-full bg-rose-500 p-4 disabled:opacity-60" title="End call"><PhoneOff className="h-4 w-4" /></button></div></div></div>;
+  return <div className="safe-area-x fixed inset-0 z-[80] flex items-center justify-center bg-zinc-950 text-white"><audio ref={remoteAudio} autoPlay playsInline aria-label="Call audio" className="pointer-events-none absolute h-px w-px opacity-0" /><div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-violet-950 via-zinc-950 to-black p-6 pb-[max(1.5rem,var(--tanry-safe-bottom))] text-center shadow-2xl">{callType === "video" && <><video ref={remoteVideo} autoPlay muted playsInline className="absolute inset-0 h-full w-full object-cover opacity-80" /><video ref={localVideo} autoPlay muted playsInline className="absolute right-4 top-4 h-32 w-24 rounded-2xl border border-white/30 object-cover" /></>}<div className="relative z-10"><div className="mx-auto mb-5 h-28 w-28 overflow-hidden rounded-full bg-white/15 ring-8 ring-white/5"><SafeImage src={peerAvatar} fallbackName={peerName} alt={peerName} className="h-full w-full object-cover" /></div><p className="text-2xl font-semibold">{peerName}</p><p className="mt-2 text-sm text-white/60">{connectionLabel}</p>{mediaError && <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-rose-300/30 bg-rose-500/10 px-4 py-3 text-left text-xs text-rose-100"><p className="font-semibold">Microphone or audio setup needs attention</p><p className="mt-1 text-rose-100/75">{mediaError}</p></div>}{callQuery.data?.status === "accepted" && !audioReady && !mediaError && <p className="mt-4 text-xs text-white/55">Connecting audio… keep this screen open for a moment.</p>}<div className="mx-auto mt-6 flex items-center justify-center gap-1.5 opacity-60"><span className="h-2 w-2 animate-pulse rounded-full bg-violet-300" /><span className="h-3 w-3 animate-pulse rounded-full bg-violet-300 [animation-delay:120ms]" /><span className="h-2 w-2 animate-pulse rounded-full bg-violet-300 [animation-delay:240ms]" /></div></div><div data-mobile-call-bar className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-center gap-3 px-4 pt-3"><button onClick={() => setMuted((value) => { const next = !value; streamRef.current?.getAudioTracks().forEach((track) => track.enabled = !next); return next; })} className={`rounded-full p-4 ${muted ? "bg-rose-500/80" : "bg-white/15"}`} title="Mute microphone">{muted ? <VolumeX className="h-5 w-5" /> : <Mic className="h-5 w-5" />}</button><button onClick={toggleSpeaker} className="rounded-full bg-white/15 p-4" title="Toggle speaker output">{speaker ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}</button>{callType === "video" && <><button onClick={toggleVideo} className={`rounded-full p-4 ${videoEnabled ? "bg-white/15" : "bg-rose-500/80"}`} title="Toggle video"><Video className="h-5 w-5" /></button><button onClick={flipCamera} className="rounded-full bg-white/15 p-4" title="Flip camera"><Camera className="h-5 w-5" /></button><button onClick={() => void togglePictureInPicture()} className="rounded-full bg-white/15 p-4" title="Picture in picture"><PictureInPicture className="h-5 w-5" /></button></>}<button disabled={ending} onClick={() => void end()} className="rounded-full bg-rose-500 p-4 disabled:opacity-60" title="End call"><PhoneOff className="h-4 w-4" /></button></div></div></div>;
 }
 
 export function AdvancedMessagesView() {

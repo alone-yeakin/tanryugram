@@ -5,6 +5,7 @@ import { PushNotifications } from "@capacitor/push-notifications";
 import { useTheme } from "@/contexts/ThemeContext";
 import { trpc } from "@/lib/trpc";
 import { normalizeMessengerPeer } from "@/lib/messengerPeer";
+import { CALL_POLL_INTERVALS } from "@/lib/callPolling";
 import { initialsAvatar } from "@/lib/mediaUrl";
 import { resolveProfileUser } from "@/lib/profileViewData";
 import { toast } from "sonner";
@@ -143,7 +144,7 @@ export default function Home() {
   const unreadNotificationsQuery = trpc.notifications.unreadCount.useQuery(undefined, { enabled: isAuthenticated && (!maintenanceMode || user?.isOwner), refetchInterval: 8000 });
   const markNotificationsReadMutation = trpc.notifications.markRead.useMutation();
   const registerPushTokenMutation = trpc.notifications.registerPushToken.useMutation();
-  const incomingCallsQuery = trpc.messages.incomingCalls.useQuery(undefined, { enabled: isAuthenticated && (!maintenanceMode || user?.isOwner), refetchInterval: 1200 });
+  const incomingCallsQuery = trpc.messages.incomingCalls.useQuery(undefined, { enabled: isAuthenticated && (!maintenanceMode || user?.isOwner), refetchInterval: CALL_POLL_INTERVALS.incoming });
   const recentCallsQuery = trpc.messages.recentCalls.useQuery(undefined, { enabled: isAuthenticated && (!maintenanceMode || user?.isOwner), refetchInterval: 15000 });
   const globalCallUpdateMutation = trpc.messages.updateCall.useMutation({ onSuccess: () => incomingCallsQuery.refetch() });
   const announcedCallId = useRef<number | null>(null);
