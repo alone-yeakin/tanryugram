@@ -785,5 +785,16 @@
 - [x] Restore secure owner-only password reset management without exposing existing user passwords
 - [x] Add regression coverage for Creator Studio layout, authorization, and reset-management contracts
 - [x] Run TypeScript, focused tests, production build, and authenticated Creator Studio visual verification
-- [ ] Save and publish the restored Creator Studio release
-- [ ] Deliver the updated Creator Studio retest steps
+- [x] Save and publish the restored Creator Studio release
+- [x] Deliver the updated Creator Studio retest steps
+
+## Creator Studio UI Restoration & Legacy Features (Current Session)
+
+- [ ] Audit historical Creator Studio source to recover the exact earlier UI and original feature surface
+- [ ] Restore the exact earlier Creator Studio layout, including original navigation and administration sections
+- [ ] Restore original features like manual password resets, user directory, and platform settings
+- [ ] Append newer tools (Reels, analytics, audit logs) in a separate section below the legacy experience
+- [ ] Add regression coverage for the restored legacy-first Creator Studio experience
+- [ ] Run TypeScript, focused tests, production build, and authenticated visual verification
+- [ ] Save and publish the restored legacy-first Creator Studio release
+- [ ] Deliver the updated restoration report and retest guidance
